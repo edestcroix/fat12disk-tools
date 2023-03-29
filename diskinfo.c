@@ -88,18 +88,17 @@ int main(int argc, char *argv[]) {
   // start with 23 unused sectors.
   int free_sectors = 0;
 
-  // TODO: Getting the free space in the disk
-  // is not working properly at all.
-  //(Traversing the fat table should be
-  // working, but something is not right somewhere)
+  // NOTE: Free space reporting has been (probably) fixed. It's now
+  // reporting the same amount of free space as the fatcat thing
+  // I found online to test with, but I don't know if that program
+  // is correct or not.
   for (int i = 2; i < fat_size * 2 / 3; i++) {
     uint16_t entry = fat_entry(fat_table, i);
     if (entry == 0x000) {
       free_sectors++;
     }
   }
-
-  printf("Free size: %d bytes\n", (free_sectors + 24) * bytes_per_sector);
+  printf("Free size: %d bytes\n", (free_sectors)*bytes_per_sector);
   byte *root_dir = root_dir_buf(disk);
   dir_buf_t root_dir_buf = (dir_buf_t){.buf = root_dir, .size = 14 * 512};
   printf("Number of files: %d\n", count_files(disk, fat_table, root_dir_buf));
