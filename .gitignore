@@ -1,2 +1,9 @@
 *.IMA
 build/
+disklist
+diskget
+diskinfo
+*.PDF
+*.JPG
+*.TXT
+*.TEX

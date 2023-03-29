@@ -70,15 +70,15 @@ int print_dirs(directory_t *dirs, char dirname[9]) {
   return num;
 }
 
-int parse_dir_buf(FILE *disk, byte *fat_table, dir_buf_t *dir_buf,
+int parse_dir_buf(FILE *disk, byte *fat_table, dir_buf_t dir_buf,
                   char dirname[9]) {
   // get all the subdirectories of the buf,
   // if they are files, print their info,
   // if they are directories, recurse
 
   int num = 0;
-  int num_dirs = dir_buf->size / 32;
-  directory_t *dirs = get_dir_list(dir_buf->buf, num_dirs);
+  int num_dirs = dir_buf.size / 32;
+  directory_t *dirs = get_dir_list(dir_buf.buf, num_dirs);
   int i = 0, zero_found = 0;
   num += print_dirs(dirs, dirname);
   // go back through the dirs list
@@ -97,7 +97,7 @@ int parse_dir_buf(FILE *disk, byte *fat_table, dir_buf_t *dir_buf,
     }
     uint16_t index = bytes_to_int(dir.first_cluster, 2);
     if (index > 1) {
-      dir_buf_t *next_buf = dir_buf_from_fat(disk, fat_table, index);
+      dir_buf_t next_buf = dir_buf_from_fat(disk, fat_table, index);
       char dirname[9];
       strncpy(dirname, bytes_to_filename(dir.filename), 8);
       num += parse_dir_buf(disk, fat_table, next_buf, dirname);
@@ -110,8 +110,8 @@ int parse_dir_buf(FILE *disk, byte *fat_table, dir_buf_t *dir_buf,
 int main(int argc, char *argv[]) {
   FILE *disk = fopen(argv[1], "rb");
   int root_dir_size = 14 * 512;
-  byte *root_dir = read_bytes(disk, 512 * 14, 9728);
-  byte *fat_table = read_bytes(disk, 512 * 9, 512);
+  byte *root_dir = root_dir_buf(disk);
+  byte *fat_table = fat_table_buf(disk);
   dir_buf_t root_buf = (dir_buf_t){.buf = root_dir, .size = root_dir_size};
-  parse_dir_buf(disk, fat_table, &root_buf, "Root Dir");
+  parse_dir_buf(disk, fat_table, root_buf, "Root Dir");
 }

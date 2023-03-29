@@ -69,41 +69,26 @@ directory_t *get_dir_list(byte *buf, int limit) {
   return result;
 }
 
-// each entry in the fat table is 12 bits long, so FAT packing
-// so the n'th entry in the FAT table is the low
-// 4 bits at 1+(3*n)/2 and hthe 8 bits in position (3*n)/2
-// if n is odd, the entry is the high 4 bits at
-// (3*n)/2 and the 8 bits in 1+(3*n)/2
-fat_entry_t fat_entry(byte *fat_table, int n) {
-  char result[2];
-  if (n % 2 == 0) {
-    result[0] = fat_table[1 + (3 * n) / 2] & 0x0F;
-    result[1] = fat_table[(3 * n) / 2];
-  } else {
-    result[0] = fat_table[(3 * n) / 2] >> 4;
-    result[1] = fat_table[(3 * n) / 2 + 1];
-  }
-  // combined the two bytes into a 12 bit integer
-  // AND it with 0xFFF to get rid of the extra bits
-  return ((byte)result[1] + ((byte)result[0] << 8)) & 0xFFF;
-}
-
 /* Assembles all the sectors of a directory into a single
  * buffer, by reading the FAT table. Returns a pointer to
  * the buffer. (On large filesystems this would
  * be really memory inefficient, but FAT-12 can't
  * be larger than =~ 1.4 MB or so)
  */
-dir_buf_t *dir_buf_from_fat(FILE *disk, byte *fat_table, int index) {
+dir_buf_t dir_buf_from_fat(FILE *disk, byte *fat_table, int index) {
   uint16_t next_index = fat_entry(fat_table, index);
   // index is the value of the current sector,
   // next_index is the value of the next sector,
   // found in the fat table at index.
 
   if (index >= 0xff8) {
-    dir_buf_t *buf = malloc(sizeof(dir_buf_t));
-    buf->buf = (byte *)"";
-    buf->size = 0;
+    // this is the last sector, read it and return
+    dir_buf_t buf;
+    buf.size = 512;
+    buf.buf = malloc(512 * sizeof(byte));
+    byte *sector = read_bytes(disk, 512, 33 + index - 2);
+    strncpy((char *)buf.buf, (char *)sector, 512);
+    free(sector);
     return buf;
   }
 
@@ -111,20 +96,20 @@ dir_buf_t *dir_buf_from_fat(FILE *disk, byte *fat_table, int index) {
   int sector_num = 33 + index - 2;
   byte *sector = read_bytes(disk, 512, sector_num * 512);
 
-  dir_buf_t *next_buf = dir_buf_from_fat(disk, fat_table, next_index);
-  dir_buf_t *buf = malloc(sizeof(dir_buf_t));
-  buf->buf = malloc((512 + next_buf->size) * sizeof(byte));
-  buf->size = 512 + next_buf->size;
-  strncpy((char *)buf->buf, (char *)sector, 512);
-  strncat((char *)buf->buf, (char *)next_buf->buf, next_buf->size);
+  dir_buf_t next_buf = dir_buf_from_fat(disk, fat_table, next_index);
+  dir_buf_t buf;
+  buf.buf = malloc((512 + next_buf.size) * sizeof(byte));
+  buf.size = 512 + next_buf.size;
+  strncpy((char *)buf.buf, (char *)sector, 512);
+  strncat((char *)buf.buf, (char *)next_buf.buf, next_buf.size);
   free(sector);
-  free(next_buf);
+  free(next_buf.buf);
   return buf;
 }
 
 int is_parent_or_cur(directory_t dir) { return (dir.filename[0] == 0x2E); }
 
-int count_files(FILE *disk, byte *fat_table, dir_buf_t *dir_buf) {
+int count_files(FILE *disk, byte *fat_table, dir_buf_t dir_buf) {
   /* works like parse_dir_buf, but doesn't print anything,
    * only counts files */
   // FIXME: for some reason, this is counting 1 file
@@ -133,9 +118,9 @@ int count_files(FILE *disk, byte *fat_table, dir_buf_t *dir_buf) {
   // Weirdly, it reports the same file amounts in
   // all other cases. (Although the disk image
   // this happens on is fucky, so it might be that.)
-  int num_dirs = dir_buf->size / 32;
+  int num_dirs = dir_buf.size / 32;
   int num = 0, zero_found = 0, i = 0;
-  directory_t *dirs = get_dir_list(dir_buf->buf, num_dirs);
+  directory_t *dirs = get_dir_list(dir_buf.buf, num_dirs);
   while (!zero_found) {
     directory_t dir = dirs[i++];
     if (dir.filename[0] == 0x00) {
@@ -148,7 +133,7 @@ int count_files(FILE *disk, byte *fat_table, dir_buf_t *dir_buf) {
       }
       uint16_t index = bytes_to_int(dir.first_cluster, 2);
       if (index > 1) {
-        dir_buf_t *next_buf = dir_buf_from_fat(disk, fat_table, index);
+        dir_buf_t next_buf = dir_buf_from_fat(disk, fat_table, index);
         num += count_files(disk, fat_table, next_buf);
       }
     } else if (dir.attribute == 0x0F || dir.attribute & 0x08 ||

@@ -64,8 +64,7 @@ char *buf_slice(byte *buf, int start, int end) {
 int main(int argc, char *argv[]) {
   FILE *disk = fopen(argv[1], "rb");
 
-  byte *boot_buf = read_bytes(disk, 512, 0);
-
+  byte *boot_buf = boot_sector_buf(disk);
   byte *root_buf = read_bytes(disk, 512, 9728);
 
   // get the os name from the buffer
@@ -81,30 +80,29 @@ int main(int argc, char *argv[]) {
 
   int sectors_per_fat = bytes_to_int(boot_buf + 22, 2);
   int fat_size = sectors_per_fat * bytes_per_sector;
+  printf("FAT size: %d\n", fat_size);
   // the FAT table starts at sector 1, and since each sector
   // is 512 bytes, the FAT table starts at byte 512
-  byte *fat_table = read_bytes(disk, 512 * 9, 512);
+  byte *fat_table = fat_table_buf(disk);
 
   // start with 23 unused sectors.
   int free_sectors = 0;
-  // free space is determined by unused sectors * bytes_per_sector.
-  // unused sectors are 0x000 in the FAT table. The first
-  // two entries in the FAT table are reserved, so we start
-  // at the third byte
-  fat_table += 3;
-  // 33 sectors are reserved, and not part of the FAT table.
-  for (int i = 0; i < (num_sectors - 33); i++) {
+
+  // TODO: Getting the free space in the disk
+  // is not working properly at all.
+  //(Traversing the fat table should be
+  // working, but something is not right somewhere)
+  for (int i = 2; i < fat_size * 2 / 3; i++) {
     uint16_t entry = fat_entry(fat_table, i);
     if (entry == 0x000) {
       free_sectors++;
     }
   }
-  fat_table -= 3;
 
-  printf("Free size: %d bytes\n", free_sectors * bytes_per_sector);
-  byte *root_dir = read_bytes(disk, 512 * 14, 9728);
+  printf("Free size: %d bytes\n", (free_sectors + 24) * bytes_per_sector);
+  byte *root_dir = root_dir_buf(disk);
   dir_buf_t root_dir_buf = (dir_buf_t){.buf = root_dir, .size = 14 * 512};
-  printf("Number of files: %d\n", count_files(disk, fat_table, &root_dir_buf));
+  printf("Number of files: %d\n", count_files(disk, fat_table, root_dir_buf));
 
   free(fat_table);
   free(root_dir);
