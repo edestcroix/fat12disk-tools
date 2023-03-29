@@ -24,13 +24,12 @@ it needds to retrieve the following:
 void print_os_name(FILE *disk) {
   // the os name is the first 8 bytes of the boot sector
   // the boot sector starts at byte 3
-  char *os_name = read_bytes_at(disk, 8, 3);
+  byte *os_name = read_bytes(disk, 8, 3);
   printf("OS Name: %s\n", os_name);
 }
 
-void print_disk_label(char *buf) {
+void print_disk_label(byte *buf) {
   // buf is the buffer containing the root directory
-
   directory_t *dirs = get_dir_list(buf, 16);
   for (int i = 0; i < 16; i++) {
     directory_t dir = dirs[i];
@@ -56,35 +55,35 @@ int byte_str_to_int(char *str, int length) {
   return result;
 }
 
-char *str_slice(char *buf, int start, int end) {
+char *buf_slice(byte *buf, int start, int end) {
   char *result = (char *)malloc((end - start) * sizeof(char));
-  strncpy(result, buf + start, end - start);
+  strncpy(result, (char *)buf + start, end - start);
   return result;
 }
 
 int main(int argc, char *argv[]) {
   FILE *disk = fopen(argv[1], "rb");
 
-  char *boot_buf = read_bytes_at(disk, 512, 0);
+  byte *boot_buf = read_bytes(disk, 512, 0);
 
-  char *root_buf = read_bytes_at(disk, 512, 9728);
+  byte *root_buf = read_bytes(disk, 512, 9728);
 
   // get the os name from the buffer
-  printf("OS Name: %s\n", str_slice(boot_buf, 3, 8));
+  printf("OS Name: %s\n", buf_slice(boot_buf, 3, 8));
   print_disk_label(root_buf);
 
   free(root_buf);
 
-  int num_sectors = byte_str_to_int(boot_buf + 19, 2);
-  int bytes_per_sector = byte_str_to_int(boot_buf + 11, 2);
+  int num_sectors = bytes_to_int(boot_buf + 19, 2);
+  int bytes_per_sector = bytes_to_int(boot_buf + 11, 2);
 
   printf("Total size: %d bytes\n", num_sectors * bytes_per_sector);
 
-  int sectors_per_fat = byte_str_to_int(boot_buf + 22, 2);
+  int sectors_per_fat = bytes_to_int(boot_buf + 22, 2);
   int fat_size = sectors_per_fat * bytes_per_sector;
   // the FAT table starts at sector 1, and since each sector
   // is 512 bytes, the FAT table starts at byte 512
-  char *fat_table = read_bytes_at(disk, 512 * 9, 512);
+  byte *fat_table = read_bytes(disk, 512 * 9, 512);
 
   // start with 23 unused sectors.
   int free_sectors = 0;
@@ -103,7 +102,7 @@ int main(int argc, char *argv[]) {
   fat_table -= 3;
 
   printf("Free size: %d bytes\n", free_sectors * bytes_per_sector);
-  char *root_dir = read_bytes_at(disk, 512 * 14, 9728);
+  byte *root_dir = read_bytes(disk, 512 * 14, 9728);
   dir_buf_t root_dir_buf = (dir_buf_t){.buf = root_dir, .size = 14 * 512};
   printf("Number of files: %d\n", count_files(disk, fat_table, &root_dir_buf));
 
