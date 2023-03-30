@@ -7,6 +7,7 @@
 #define SECTOR_SIZE 512
 #define SECTOR_OFFSET 31
 
+#define DIR_SIZE 32
 #define DIRS_PER_SECTOR 16
 
 #define LAST_SECTOR 0xFF8
@@ -34,9 +35,11 @@ typedef struct directory_t {
   byte first_cluster[2];
   byte file_size[4];
 } directory_t;
-#define DIR_SIZE sizeof(directory_t)
 
-// wrapper for a list of directories, to keep track of size.
+/* wrapper for a list of directories, to keep track of size.
+ * (Decided to do it this way instead of a linked list.)
+ * dirs is a pointer to the first directory in the list,
+ * which is just a sequential block of directory structs in memory.*/
 typedef struct dir_list_t {
   directory_t *dirs;
   int size;

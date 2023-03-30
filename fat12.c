@@ -1,13 +1,31 @@
 /* File containing utilites for interacting with fat12 disk images. */
 #include "fat12.h"
 
-// wrapper around common code.
+/* checks if the index from the FAT table is
+ * the value(s) that indicate the end of a file.
+ * Additionally, throws error if index is <= 0,
+ * as this should never be encountered normally. */
+int last_sector(int index, char *exit_msg) {
+  if (index <= 0) {
+    printf("Error at %s: empty sector.\n", exit_msg);
+    exit(1);
+  }
+  return index >= LAST_SECTOR;
+}
+
+// reads exactly SECTOR_SIZE bytes from the disk, at the
+// sector_num * SECTOR_SIZE offset from the start of the disk.
 byte *read_sector(FILE *disk, int sector_num) {
   return read_bytes(disk, SECTOR_SIZE, sector_num * SECTOR_SIZE);
 }
 
-/* Retrieves the 12-bit value stored
- * in the fat table at index n. */
+/* Retrieves the 12-bit value stored in the fat table at index n.
+ * If n is even, the lower byte of the index is b1, and the
+ * remaining 4 bits are the upper 4 bits of b2. (the bits from b2
+ * are shifted right 8 bits to be added to b1 using logical OR.)
+ * If n is odd, the upper 4 bits of b1 are the lower 4 bits of the index,
+ * and b2 is the upper byte of the index. (b2 gets shifted left 4
+ * bits to make room for the bits from b1) */
 ushort fat_entry(byte *fat_table, int n) {
   ushort b1 = fat_table[3 * n / 2], b2 = fat_table[3 * n / 2 + 1];
   return (n % 2 == 0) ? ((0x00f & b2) << 8) | b1 : b2 << 4 | ((0xf0 & b1) >> 4);
@@ -20,7 +38,7 @@ void copy_file(FILE *src, FILE *out, byte *fat_table, int index, int size) {
   ushort next_index = fat_entry(fat_table, index);
   byte *sector = read_sector(src, index + SECTOR_OFFSET);
 
-  if (next_index >= LAST_SECTOR || next_index == 0x00) {
+  if (last_sector(next_index, "copy_file")) {
     fwrite(sector, size, 1, out);
   } else {
     fwrite(sector, SECTOR_SIZE, 1, out);
@@ -105,7 +123,8 @@ directory_t *read_dirs(FILE *disk, int sector, int limit) {
   return dir_list;
 }
 
-// reads the 16 directory entries in the sector specified,
+// reads the 16 directory entries in the sector specified. (sector value
+// should be the number of the sector, not it's address in the disk.)
 directory_t *sector_dirs(FILE *disk, int sector) {
   return read_dirs(disk, sector, DIRS_PER_SECTOR);
 }
@@ -114,8 +133,7 @@ directory_t *root_dirs(FILE *disk) {
   return read_dirs(disk, ROOT, DIRS_IN_ROOT);
 }
 
-/* performs a complete filesystem traversal,
- * counting every file encountered. */
+/* performs a complete filesystem traversal, counting every file encountered. */
 int count_files(FILE *disk, byte *fat_table, dir_list_t dirs) {
   int num = 0, num_dirs = dirs.size;
   directory_t *dir_list = dirs.dirs;
@@ -125,17 +143,8 @@ int count_files(FILE *disk, byte *fat_table, dir_list_t dirs) {
     case 1 ... 2:
       continue;
     case 3:
-      goto count_files_end;
+      return num;
     default:
-      // don't have to worry about long filenames,
-      // because read_dirs already filters them out,
-      // still use the should_skip_dir function though,
-      // just to catch empty dirs and dots, because
-      // read_dirs catching them isn't reliable.
-      // (I think, I'll probably test if I can get
-      // away with only checking for empty
-      // filenames here.)
-      // TODO: Do that test.
       if (dir.attribute & DIR_MASK) {
         ushort index = bytes_to_ushort(dir.first_cluster);
         if (index > 1) {
@@ -149,9 +158,9 @@ int count_files(FILE *disk, byte *fat_table, dir_list_t dirs) {
       break;
     }
   }
-count_files_end:
   return num;
 }
+
 /* Creates a list of directory_t structs contained in
  * the directory starting at index in the FAT Table
  * Reads all the directories from the sector into
@@ -160,13 +169,14 @@ dir_list_t dir_from_fat(FILE *disk, byte *fat_table, int index) {
   ushort next_index = fat_entry(fat_table, index);
   int sector_num = 33 + index - 2;
 
-  if (next_index >= LAST_SECTOR) {
+  if (last_sector(next_index, "dir_from_fat")) {
     directory_t *dirs = sector_dirs(disk, sector_num);
     dir_list_t dir_list;
     dir_list.dirs = dirs;
     dir_list.size = 16;
     return dir_list;
   }
+
   directory_t *dirs = sector_dirs(disk, sector_num);
   dir_list_t dir_list;
   dir_list_t next_dir_list = dir_from_fat(disk, fat_table, next_index);

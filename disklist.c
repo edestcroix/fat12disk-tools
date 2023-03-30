@@ -1,6 +1,10 @@
 #include "fat12.h"
 
-void print_dir(directory_t dir, char type, char dirname[9]) {
+/* prints F/D for files/subdirectories, and
+ * the file size, (0 for subdirs), the filename,
+ * and file creation date. */
+void print_dir(directory_t dir) {
+  char type = (dir.attribute & DIR_MASK) ? 'D' : 'F';
   printf("%c ", type);
   printf("%-10d", bytes_to_ushort(dir.file_size));
   // filename is 8 bytes, but not null-terminated.
@@ -37,11 +41,7 @@ void print_dirs(directory_t *dirs, char dirname[9], int size) {
       return;
     default:
       print_header(dirname, &header_printed);
-      if (dir.attribute == DIR_MASK) {
-        print_dir(dir, 'D', dirname);
-      } else {
-        print_dir(dir, 'F', dirname);
-      }
+      print_dir(dir);
     }
   }
 }
