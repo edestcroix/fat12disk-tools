@@ -1,11 +1,5 @@
-/* File containing utilites for
- * interacting with fat12 disk images.
- */
+/* File containing utilites for interacting with fat12 disk images. */
 #include "fat12.h"
-#include "byte.h"
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
 
 // wrapper around common code.
 byte *read_sector(FILE *disk, int sector_num) {
@@ -14,35 +8,24 @@ byte *read_sector(FILE *disk, int sector_num) {
 
 /* Retrieves the 12-bit value stored
  * in the fat table at index n. */
-uint16_t fat_entry(byte *fat_table, int n) {
-  // first, read the 2 bytes starting at
-  // (3*n/2)th byte of the table
-  unsigned char entry[2];
-  memcpy(entry, fat_table + ((3 * n) / 2), 2);
-  uint16_t b1 = entry[0];
-  uint16_t b2 = entry[1];
+ushort fat_entry(byte *fat_table, int n) {
+  ushort b1 = fat_table[3 * n / 2], b2 = fat_table[3 * n / 2 + 1];
   return (n % 2 == 0) ? ((0x00f & b2) << 8) | b1 : b2 << 4 | ((0xf0 & b1) >> 4);
 }
 
 /* Copies the file starting at the sector in the FAT-12
  * filesystem in src_disk corresponding to index into the out file
  * on the host filesystem. */
-void copy_file(FILE *src_disk, FILE *out, byte *fat_table, int index,
-               int size) {
-  uint16_t next_index = fat_entry(fat_table, index);
-  int sector_num = index + SECTOR_OFFSET;
+void copy_file(FILE *src, FILE *out, byte *fat_table, int index, int size) {
+  ushort next_index = fat_entry(fat_table, index);
+  byte *sector = read_sector(src, index + SECTOR_OFFSET);
 
   if (next_index >= LAST_SECTOR || next_index == 0x00) {
-    // this is the end of the chain,
-    // read the sector and return it
-    byte *sector = read_sector(src_disk, sector_num);
     fwrite(sector, size, 1, out);
-    free(sector);
-    return;
+  } else {
+    fwrite(sector, SECTOR_SIZE, 1, out);
+    copy_file(src, out, fat_table, next_index, size - SECTOR_SIZE);
   }
-  byte *sector = read_sector(src_disk, sector_num);
-  fwrite(sector, SECTOR_SIZE, 1, out);
-  copy_file(src_disk, out, fat_table, next_index, size - SECTOR_SIZE);
   free(sector);
 }
 
@@ -63,6 +46,8 @@ int should_skip_dir(directory_t dir) {
   if (dir.filename[0] == 0x00) {
     return 3;
   } else if (dir.filename[0] == FILE_FREE) {
+    return 2;
+  } else if (bytes_to_ushort(dir.first_cluster) <= 1) {
     return 2;
   } else if (dir.filename[0] == DOT) {
     return 2;
@@ -89,11 +74,10 @@ directory_t *read_dirs(FILE *disk, int sector, int limit) {
     case 2:
       continue;
     case 3:
+      // zero out the rest of the array before exit, to make
+      // sure there are no garbage values leftover.
       memset(dir_list + add_at, 0x00, (limit - i) * sizeof(directory_t));
-      // using goto here because I don't know if
-      // a break statement would break out of the
-      // loop or the just switch statement.
-      goto read_dir_end;
+      return dir_list;
     default:
       // if the attribute is 0x0F, it's a long filename,
       // so skip it, and set the last_dir_lf flag
@@ -118,7 +102,6 @@ directory_t *read_dirs(FILE *disk, int sector, int limit) {
       dir_list[add_at++] = dir;
     }
   }
-read_dir_end:
   return dir_list;
 }
 
@@ -154,7 +137,7 @@ int count_files(FILE *disk, byte *fat_table, dir_list_t dirs) {
       // filenames here.)
       // TODO: Do that test.
       if (dir.attribute & DIR_MASK) {
-        uint16_t index = bytes_to_int(dir.first_cluster, 2);
+        ushort index = bytes_to_ushort(dir.first_cluster);
         if (index > 1) {
           dir_list_t next_dirs = dir_from_fat(disk, fat_table, index);
           num += count_files(disk, fat_table, next_dirs);
@@ -174,7 +157,7 @@ count_files_end:
  * Reads all the directories from the sector into
  * the list, then recurses into the next sector. */
 dir_list_t dir_from_fat(FILE *disk, byte *fat_table, int index) {
-  uint16_t next_index = fat_entry(fat_table, index);
+  ushort next_index = fat_entry(fat_table, index);
   int sector_num = 33 + index - 2;
 
   if (next_index >= LAST_SECTOR) {

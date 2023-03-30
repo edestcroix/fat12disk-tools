@@ -1,9 +1,4 @@
 #include "fat12.h"
-#include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
 
 void print_os_name(FILE *disk) {
   // the os name is the first 8 bytes of the boot sector
@@ -36,9 +31,9 @@ void print_disk_label(FILE *disk) {
   free(dirs);
 }
 
-char *buf_slice(byte *buf, int start, int end) {
-  char *result = (char *)malloc((end - start) * sizeof(char));
-  strncpy(result, (char *)buf + start, end - start);
+byte *buf_slice(byte *buf, int start, int end) {
+  byte *result = malloc((end - start) * sizeof(char));
+  memcpy(result, buf + start, end - start);
   return result;
 }
 
@@ -51,32 +46,28 @@ int main(int argc, char *argv[]) {
   printf("OS Name: %s\n", buf_slice(boot_buf, 3, 8));
   print_disk_label(disk);
 
-  int num_sectors = bytes_to_int(boot_buf + 19, 2);
-  int bytes_per_sector = bytes_to_int(boot_buf + 11, 2);
+  ushort num_sectors = bytes_to_ushort(boot_buf + 19);
+  printf("Num sectors: %d\n", num_sectors);
+  ushort bytes_per_sector = bytes_to_ushort(boot_buf + 11);
 
   printf("Total size: %d bytes\n", num_sectors * bytes_per_sector);
 
-  int sectors_per_fat = bytes_to_int(boot_buf + 22, 2);
+  ushort sectors_per_fat = bytes_to_ushort(boot_buf + 22);
   int fat_size = sectors_per_fat * bytes_per_sector;
   printf("FAT size: %d\n", fat_size);
   byte *fat_table = fat_table_buf(disk);
 
   int free_sectors = 0;
-
-  // NOTE: Free space reporting is now the same
-  // as the WinImage tool that created the images,
-  // so I consider that correct.
-  for (int i = 2; i < 2848; i++) {
-    uint16_t entry = fat_entry(fat_table, i);
-    if (entry == 0x000) {
-      free_sectors++;
-    }
+  // the first 2 entries in the fat table are reserved,
+  // and there are 32 sectors that are not available for
+  // data storage which should be excluded.
+  for (int i = 2; i < num_sectors - 32; i++) {
+    free_sectors += (fat_entry(fat_table, i) == 0x000);
   }
-  printf("Free size: %d bytes\n", (free_sectors)*bytes_per_sector);
+  printf("Free size: %d bytes\n", free_sectors * bytes_per_sector);
 
-  int root_dir_size = 14 * 512, dirs_in_root = root_dir_size / 32;
   directory_t *dirs = root_dirs(disk);
-  dir_list_t dir_list = (dir_list_t){.dirs = dirs, .size = dirs_in_root};
+  dir_list_t dir_list = (dir_list_t){.dirs = dirs, .size = DIRS_IN_ROOT};
   printf("Total number of files: %d\n", count_files(disk, fat_table, dir_list));
 
   free(fat_table);

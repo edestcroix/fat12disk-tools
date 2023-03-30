@@ -1,14 +1,6 @@
-/* Diskget fetches a file
- * out of the root directory of the disk image
- * into the current directory. (Error
- * if file not found in root dir)
- */
+/* Diskget fetches a file out of the root directory of the disk image
+ * into the current directory. (Error if file not found in root dir) */
 #include "fat12.h"
-#include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
 
 int main(int argc, char *argv[]) {
   FILE *disk = fopen(argv[1], "rb");
@@ -21,16 +13,17 @@ int main(int argc, char *argv[]) {
     case 1:
       continue;
     case 2:
-      goto end;
+      printf("%s not found in root directory.\n", target);
+      exit(1);
     default:
       NULL; // My linter complains if I don't have a statement here
       char *filename = filename_ext(dir);
       if (strcmp(filename, target) == 0) {
         printf("Found %s\n", filename);
-        uint16_t index = bytes_to_int(dir.first_cluster, 2);
+        ushort index = bytes_to_ushort(dir.first_cluster);
 
         byte *fat_table = fat_table_buf(disk);
-        int size = bytes_to_int(dir.file_size, 4);
+        int size = bytes_to_ushort(dir.file_size);
         FILE *dest = fopen(filename, "wb");
         copy_file(disk, dest, fat_table, index, size);
         fclose(dest);
@@ -41,6 +34,4 @@ int main(int argc, char *argv[]) {
       }
     }
   }
-end:
-  printf("%s not found in root directory.\n", target);
 }

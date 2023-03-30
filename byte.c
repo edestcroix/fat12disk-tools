@@ -2,12 +2,6 @@
  * the raw bytes from FAT-12 filesystems into usuable data.
  */
 #include "byte.h"
-#include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <time.h>
-#include <unistd.h>
 
 /* Converts the little-endian byte sequence
  * provided into the integer value it represents.
@@ -20,12 +14,17 @@ unsigned int bytes_to_int(byte *bytes, int size) {
   return result;
 }
 
+ushort bytes_to_ushort(byte *bytes) {
+  ushort result = 0;
+  for (int i = 0; i < 2; i++) {
+    result += bytes[i] << (8 * i);
+  }
+  return result;
+}
+
 /* Converts a string of bytes into a filename
  * (Really just null-terminates the sequence
  * at the first space and casts to a char pointer) */
-// NOTE: this might have issues because
-// bytes are unisgned and chars are not,
-// but on filenames only this should be fine.
 char *bytes_to_filename(byte *bytes) {
   for (int i = 0; i < 8; i++) {
     if (bytes[i] == 0x20) {

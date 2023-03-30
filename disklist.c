@@ -1,13 +1,8 @@
 #include "fat12.h"
-#include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
 
 void print_dir(directory_t dir, char type, char dirname[9]) {
   printf("%c ", type);
-  printf("%-10d", bytes_to_int(dir.file_size, 4));
+  printf("%-10d", bytes_to_ushort(dir.file_size));
   // filename is 8 bytes, but not null-terminated.
   char filename[13];
   memset(filename, 0, 12);
@@ -23,73 +18,57 @@ void print_dir(directory_t dir, char type, char dirname[9]) {
   printf("%s\n", creation_time_str);
 }
 
-int print_dirs(directory_t *dirs, char dirname[9]) {
-  int i = 0, zero_found = 0, num = 0;
-  int header_printed = 0;
-  while (!zero_found) {
-    directory_t dir = dirs[i++];
+void print_header(char dirname[9], char *header_printed) {
+  if (!*header_printed) {
+    printf("%s\n", dirname);
+    printf("===================================================\n");
+    *header_printed = 1;
+  }
+}
+
+void print_dirs(directory_t *dirs, char dirname[9], int size) {
+  char header_printed = 0;
+  for (int i = 0; i < size; i++) {
+    directory_t dir = dirs[i];
     switch (should_skip_dir(dir)) {
     case 1 ... 2:
       continue;
     case 3:
-      goto print_dir_end;
+      return;
     default:
+      print_header(dirname, &header_printed);
       if (dir.attribute == DIR_MASK) {
-        // only print the header if we have
-        // made it to a valid directory
-        // that is not . or .. This
-        // way, we don't print the header for empty
-        // directories.
-        if (!header_printed) {
-          printf("%s\n", dirname);
-          printf("===================================================\n");
-          header_printed = 1;
-        }
         print_dir(dir, 'D', dirname);
       } else {
-        if (!header_printed) {
-          printf("%s\n", dirname);
-          printf("===================================================\n");
-          header_printed = 1;
-        }
         print_dir(dir, 'F', dirname);
-        num++;
       }
     }
   }
-print_dir_end:
-  return num;
 }
 
-int parse_dirs(FILE *disk, byte *fat_table, dir_list_t dirs, char dirname[9]) {
-  int num = 0;
-  int num_dirs = dirs.size;
+void parse_dirs(FILE *disk, byte *fat_table, dir_list_t dirs, char dirname[9]) {
   directory_t *dir_arr = dirs.dirs;
-  int i = 0, zero_found = 0;
-  num += print_dirs(dir_arr, dirname);
-  for (int i = 0; i < num_dirs; i++) {
+  print_dirs(dir_arr, dirname, dirs.size);
+  for (int i = 0; i < dirs.size; i++) {
     directory_t dir = dir_arr[i];
-
     switch (should_skip_dir(dir)) {
     case 1 ... 2:
       continue;
     case 3:
-      goto parse_dir_end;
+      return;
     default:
       if (!(dir.attribute & DIR_MASK)) {
         continue;
       }
-      uint16_t index = bytes_to_int(dir.first_cluster, 2);
+      ushort index = bytes_to_ushort(dir.first_cluster);
       if (index > 1) {
         char dirname[9];
         strncpy(dirname, bytes_to_filename(dir.filename), 8);
         dir_list_t next_dirs = dir_from_fat(disk, fat_table, index);
-        num += parse_dirs(disk, fat_table, next_dirs, dirname);
+        parse_dirs(disk, fat_table, next_dirs, dirname);
       }
     }
   }
-parse_dir_end:
-  return num;
 }
 
 int main(int argc, char *argv[]) {

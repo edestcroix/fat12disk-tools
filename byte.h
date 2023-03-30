@@ -1,16 +1,16 @@
-#include <stdint.h>
-#include <stdio.h>
-#include <time.h>
-
 /* Header file for byte.c, which has operations
  * for handling unsigned chars as bytes. And
- * dealing with raw bytes from FAT-12 filesystems.
- */
+ * dealing with raw bytes from FAT-12 filesystems. */
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+#include <unistd.h>
 
 typedef unsigned char byte;
 
 // byte sequence conversion functions
-unsigned int bytes_to_int(byte *bytes, int size);
+ushort bytes_to_ushort(byte *bytes);
 char *bytes_to_filename(byte *bytes);
 struct tm bytes_to_time(byte *bytes);
 

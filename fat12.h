@@ -1,5 +1,4 @@
 #include "byte.h"
-#include <stdio.h>
 
 #define ROOT 19
 #define ROOT_DIR_SIZE (14 * 512)
@@ -8,7 +7,6 @@
 #define SECTOR_SIZE 512
 #define SECTOR_OFFSET 31
 
-#define DIR_SIZE 32
 #define DIRS_PER_SECTOR 16
 
 #define LAST_SECTOR 0xFF8
@@ -36,31 +34,28 @@ typedef struct directory_t {
   byte first_cluster[2];
   byte file_size[4];
 } directory_t;
+#define DIR_SIZE sizeof(directory_t)
 
-typedef struct buf_t {
-  byte *buf;
-  int size;
-} buf_t;
-
+// wrapper for a list of directories, to keep track of size.
 typedef struct dir_list_t {
   directory_t *dirs;
   int size;
 } dir_list_t;
 
-uint16_t fat_entry(byte *fat_table, int n);
+ushort fat_entry(byte *fat_table, int n);
 
-// fucntions for various filesystem actions.
+// functions for various filesystem actions.
 void copy_file(FILE *src_disk, FILE *out, byte *fat_table, int index, int size);
 int count_files(FILE *disk, byte *fat_table, dir_list_t dirs);
 dir_list_t dir_from_fat(FILE *disk, byte *fat_table, int index);
 
 int should_skip_dir(directory_t dir);
+
 // functions for reading directories out of the filesystem
 directory_t *sector_dirs(FILE *disk, int sector);
 directory_t *root_dirs(FILE *disk);
 
-// helper functions for getting boot sector and
-// fat table buffers.
+// helper functions for getting boot sector and fat table buffers.
 byte *boot_sector_buf(FILE *disk);
 byte *fat_table_buf(FILE *disk);
 
