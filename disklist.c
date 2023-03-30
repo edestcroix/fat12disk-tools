@@ -29,9 +29,9 @@ int print_dirs(directory_t *dirs, char dirname[9]) {
   while (!zero_found) {
     directory_t dir = dirs[i++];
     switch (should_skip_dir(dir)) {
-    case 1:
+    case 1 ... 2:
       continue;
-    case 2:
+    case 3:
       goto print_dir_end;
     default:
       if (dir.attribute == DIR_MASK) {
@@ -71,9 +71,9 @@ int parse_dirs(FILE *disk, byte *fat_table, dir_list_t dirs, char dirname[9]) {
     directory_t dir = dir_arr[i];
 
     switch (should_skip_dir(dir)) {
-    case 1:
+    case 1 ... 2:
       continue;
-    case 2:
+    case 3:
       goto parse_dir_end;
     default:
       if (!(dir.attribute & DIR_MASK)) {

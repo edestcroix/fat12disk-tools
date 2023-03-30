@@ -53,17 +53,20 @@ directory_t read_dir(FILE *disk, int address) {
   return dir;
 }
 
-// consolidates all the annoying if statements
-// to determine if a directory should be skipped
-// returns 1 if it should be skipped,
-// 0 if not, and 2 if all further directories
-// should be skipped.
+/* Returns status code to determine whether
+ * a directory entry should be skipped.
+ * 0: do not skip
+ * 1: volume_label (sometimes this shouldn't be skipped)
+ * 2: free entry, skip
+ * 3: free entry, skip and end search. */
 int should_skip_dir(directory_t dir) {
   if (dir.filename[0] == 0x00) {
-    return 2;
+    return 3;
   } else if (dir.filename[0] == FILE_FREE) {
-    return 1;
+    return 2;
   } else if (dir.filename[0] == DOT) {
+    return 2;
+  } else if (dir.attribute == LABEL_MASK) {
     return 1;
   } else {
     return 0;
@@ -82,9 +85,10 @@ directory_t *read_dirs(FILE *disk, int sector, int limit) {
   for (int i = 0; i < limit; i++) {
     directory_t dir = read_dir(disk, sector * SECTOR_SIZE + i * DIR_SIZE);
     switch (should_skip_dir(dir)) {
-    case 1:
-      continue;
+    // only case 2 and 3 should be skipped.
     case 2:
+      continue;
+    case 3:
       memset(dir_list + add_at, 0x00, (limit - i) * sizeof(directory_t));
       // using goto here because I don't know if
       // a break statement would break out of the
@@ -95,9 +99,6 @@ directory_t *read_dirs(FILE *disk, int sector, int limit) {
       // so skip it, and set the last_dir_lf flag
       if (dir.attribute == LONG_NAME) {
         last_dir_lf = 1;
-        continue;
-      }
-      if (dir.attribute & LABEL_MASK) {
         continue;
       }
       if (dir.attribute & DIR_MASK) {
@@ -138,9 +139,9 @@ int count_files(FILE *disk, byte *fat_table, dir_list_t dirs) {
   for (int i = 0; i < num_dirs; i++) {
     directory_t dir = dir_list[i];
     switch (should_skip_dir(dir)) {
-    case 1:
+    case 1 ... 2:
       continue;
-    case 2:
+    case 3:
       goto count_files_end;
     default:
       // don't have to worry about long filenames,

@@ -14,12 +14,18 @@ void print_os_name(FILE *disk) {
 
 void print_disk_label(FILE *disk) {
   // buf is the buffer containing the root directory
-  directory_t *dirs = sector_dirs(disk, 19);
-  for (int i = 0; i < 16; i++) {
+  directory_t *dirs = root_dirs(disk);
+  for (int i = 0; i < DIRS_IN_ROOT; i++) {
     directory_t dir = dirs[i];
+    int skip = should_skip_dir(dir);
+    if (skip == 3) {
+      break;
+    } else if (skip != 1) {
+      continue;
+    }
     // the disk label is the first directory entry
     // with the attribute 0x08
-    if (dir.attribute == 0x08) {
+    if (dir.attribute == LABEL_MASK) {
       printf("Disk Label: ");
       for (int j = 0; j < 8; j++) {
         printf("%c", dir.filename[j]);
