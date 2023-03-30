@@ -33,15 +33,6 @@ void print_disk_label(FILE *disk) {
   free(dirs);
 }
 
-// converts "length" bytes of a string to an int
-int byte_str_to_int(char *str, int length) {
-  int result = 0;
-  for (int i = 0; i < length; i++) {
-    result += str[i] << (8 * i);
-  }
-  return result;
-}
-
 byte *buf_slice(byte *buf, int start, int end) {
   byte *result = (byte *)malloc((end - start) * sizeof(byte));
   memcpy(result, buf + start, end - start);
