@@ -9,7 +9,7 @@
 
 // wrapper around common code.
 byte *read_sector(FILE *disk, int sector_num) {
-  return read_bytes(disk, 512, sector_num * 512);
+  return read_bytes(disk, SECTOR_SIZE, sector_num * SECTOR_SIZE);
 }
 
 /* Retrieves the 12-bit value stored
@@ -53,6 +53,23 @@ directory_t read_dir(FILE *disk, int address) {
   return dir;
 }
 
+// consolidates all the annoying if statements
+// to determine if a directory should be skipped
+// returns 1 if it should be skipped,
+// 0 if not, and 2 if all further directories
+// should be skipped.
+int should_skip_dir(directory_t dir) {
+  if (dir.filename[0] == 0x00) {
+    return 2;
+  } else if (dir.filename[0] == FILE_FREE) {
+    return 1;
+  } else if (dir.filename[0] == DOT) {
+    return 1;
+  } else {
+    return 0;
+  }
+}
+
 // allows reading limit amount of directory entries from
 // the sector specified. Allows reading arbitrary number of
 // directory entriess, so it is not exposed outside this
@@ -63,24 +80,17 @@ directory_t *read_dirs(FILE *disk, int sector, int limit) {
   int add_at = 0;
   int last_dir_lf = 0;
   for (int i = 0; i < limit; i++) {
-    // check if the first byte of filename
-    // is 0x00, in which case the rest of the
-    // directory entries are empty
     directory_t dir = read_dir(disk, sector * SECTOR_SIZE + i * DIR_SIZE);
-    if (dir.filename[0] == FILE_FREE) {
+    switch (should_skip_dir(dir)) {
+    case 1:
       continue;
-    } else if (dir.filename[0] == 0x00) {
-      // set the rest of the list to
-      // only 0x00 bytes, in case this bit
-      // of memory is being reused. Otherwise,
-      // the rest of the list might have old
-      // data in it.
+    case 2:
       memset(dir_list + add_at, 0x00, (limit - i) * sizeof(directory_t));
-      break;
-    } else {
-      if (bytes_to_int(dir.first_cluster, 2) <= 1) {
-        continue;
-      }
+      // using goto here because I don't know if
+      // a break statement would break out of the
+      // loop or the just switch statement.
+      goto read_dir_end;
+    default:
       // if the attribute is 0x0F, it's a long filename,
       // so skip it, and set the last_dir_lf flag
       if (dir.attribute == LONG_NAME) {
@@ -107,6 +117,7 @@ directory_t *read_dirs(FILE *disk, int sector, int limit) {
       dir_list[add_at++] = dir;
     }
   }
+read_dir_end:
   return dir_list;
 }
 
@@ -126,26 +137,37 @@ int count_files(FILE *disk, byte *fat_table, dir_list_t dirs) {
   directory_t *dir_list = dirs.dirs;
   for (int i = 0; i < num_dirs; i++) {
     directory_t dir = dir_list[i];
-    if (dir.filename[0] == 0x00) {
-      break;
-    } else if (dir.filename[0] == FILE_FREE) {
+    switch (should_skip_dir(dir)) {
+    case 1:
       continue;
-    } else if (dir.filename[0] == DOT) {
-      continue;
-    } else if (dir.attribute & DIR_MASK) {
-      uint16_t index = bytes_to_int(dir.first_cluster, 2);
-      if (index > 1) {
-        dir_list_t next_dirs = dir_from_fat(disk, fat_table, index);
-        num += count_files(disk, fat_table, next_dirs);
+    case 2:
+      goto count_files_end;
+    default:
+      // don't have to worry about long filenames,
+      // because read_dirs already filters them out,
+      // still use the should_skip_dir function though,
+      // just to catch empty dirs and dots, because
+      // read_dirs catching them isn't reliable.
+      // (I think, I'll probably test if I can get
+      // away with only checking for empty
+      // filenames here.)
+      // TODO: Do that test.
+      if (dir.attribute & DIR_MASK) {
+        uint16_t index = bytes_to_int(dir.first_cluster, 2);
+        if (index > 1) {
+          dir_list_t next_dirs = dir_from_fat(disk, fat_table, index);
+          num += count_files(disk, fat_table, next_dirs);
+        }
+      } else if (!(dir.attribute & DIR_MASK)) {
+        num++;
+        continue;
       }
-    } else if (!(dir.attribute & DIR_MASK)) {
-      num++;
-      continue;
+      break;
     }
   }
+count_files_end:
   return num;
 }
-
 /* Creates a list of directory_t structs contained in
  * the directory starting at index in the FAT Table
  * Reads all the directories from the sector into

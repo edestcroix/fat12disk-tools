@@ -28,45 +28,36 @@ int print_dirs(directory_t *dirs, char dirname[9]) {
   int header_printed = 0;
   while (!zero_found) {
     directory_t dir = dirs[i++];
-    // print the attribute as a hex value
-    // padded to 2 digits
-    if (dir.filename[0] == 0x00) {
-      // the only way to tell if we have
-      // reached the end of the directory
-      // list is if we hit a 0x00,
-      // because the directory list is not
-      // null-terminated. If we get 0x00 here,
-      // it means that get_dir_list has
-      // stopped adding to the list here.
-      zero_found = 1;
-    } else if (dir.filename[0] == FILE_FREE) {
+    switch (should_skip_dir(dir)) {
+    case 1:
       continue;
-    } else if (dir.attribute == DIR_MASK) {
-      // check if the dir is . or ..
-      if (dir.filename[0] == DOT) {
-        continue;
+    case 2:
+      goto print_dir_end;
+    default:
+      if (dir.attribute == DIR_MASK) {
+        // only print the header if we have
+        // made it to a valid directory
+        // that is not . or .. This
+        // way, we don't print the header for empty
+        // directories.
+        if (!header_printed) {
+          printf("%s\n", dirname);
+          printf("===================================================\n");
+          header_printed = 1;
+        }
+        print_dir(dir, 'D', dirname);
+      } else {
+        if (!header_printed) {
+          printf("%s\n", dirname);
+          printf("===================================================\n");
+          header_printed = 1;
+        }
+        print_dir(dir, 'F', dirname);
+        num++;
       }
-      // only print the header if we have
-      // made it to a valid directory
-      // that is not . or .. This
-      // way, we don't print the header for empty
-      // directories.
-      if (!header_printed) {
-        printf("%s\n", dirname);
-        printf("===================================================\n");
-        header_printed = 1;
-      }
-      print_dir(dir, 'D', dirname);
-    } else {
-      if (!header_printed) {
-        printf("%s\n", dirname);
-        printf("===================================================\n");
-        header_printed = 1;
-      }
-      print_dir(dir, 'F', dirname);
-      num++;
     }
   }
+print_dir_end:
   return num;
 }
 
@@ -78,24 +69,26 @@ int parse_dirs(FILE *disk, byte *fat_table, dir_list_t dirs, char dirname[9]) {
   num += print_dirs(dir_arr, dirname);
   for (int i = 0; i < num_dirs; i++) {
     directory_t dir = dir_arr[i];
-    if (dir.filename[0] == 0x00) {
-      break;
-    }
 
-    if (!(dir.attribute & DIR_MASK)) {
+    switch (should_skip_dir(dir)) {
+    case 1:
       continue;
-    }
-    if (dir.filename[0] == DOT) {
-      continue;
-    }
-    uint16_t index = bytes_to_int(dir.first_cluster, 2);
-    if (index > 1) {
-      char dirname[9];
-      strncpy(dirname, bytes_to_filename(dir.filename), 8);
-      dir_list_t next_dirs = dir_from_fat(disk, fat_table, index);
-      num += parse_dirs(disk, fat_table, next_dirs, dirname);
+    case 2:
+      goto parse_dir_end;
+    default:
+      if (!(dir.attribute & DIR_MASK)) {
+        continue;
+      }
+      uint16_t index = bytes_to_int(dir.first_cluster, 2);
+      if (index > 1) {
+        char dirname[9];
+        strncpy(dirname, bytes_to_filename(dir.filename), 8);
+        dir_list_t next_dirs = dir_from_fat(disk, fat_table, index);
+        num += parse_dirs(disk, fat_table, next_dirs, dirname);
+      }
     }
   }
+parse_dir_end:
   return num;
 }
 

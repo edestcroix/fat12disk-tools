@@ -54,6 +54,7 @@ void copy_file(FILE *src_disk, FILE *out, byte *fat_table, int index, int size);
 int count_files(FILE *disk, byte *fat_table, dir_list_t dirs);
 dir_list_t dir_from_fat(FILE *disk, byte *fat_table, int index);
 
+int should_skip_dir(directory_t dir);
 // functions for reading directories out of the filesystem
 directory_t *sector_dirs(FILE *disk, int sector);
 directory_t *root_dirs(FILE *disk);
