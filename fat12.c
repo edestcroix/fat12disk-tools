@@ -17,27 +17,12 @@ byte *read_sector(FILE *disk, int sector_num) {
 uint16_t fat_entry(byte *fat_table, int n) {
   // first, read the 2 bytes starting at
   // (3*n/2)th byte of the table
-  unsigned char entry[2];
+  uint8_t entry[2];
   memcpy(entry, fat_table + ((3 * n) / 2), 2);
-  if (n % 2 == 0) {
-    /* if n is even, the first byte of the entry is
-     * in position 0, and we have to get the low 4
-     * bytes of the second byte, shift it left
-     * 8 bits, and OR it with the first byte. */
-    uint16_t first_byte = entry[0];
-    uint16_t second_byte = entry[1];
-    return ((0x00f & second_byte) << 8) | first_byte;
-  } else {
-    /* if n is odd, the second byte of the entry is
-     * in position 1, and we have to get the high 4
-     * bytes of the first byte, shift it right 4,
-     * and OR it with the second byte shifted left 4 */
-    uint16_t first_byte = entry[0];
-    uint16_t second_byte = entry[1];
-    return second_byte << 4 | ((0xf0 & first_byte) >> 4);
-  }
+  uint16_t b1 = entry[0];
+  uint16_t b2 = entry[1];
+  return (n % 2 == 0) ? ((0x00f & b2) << 8) | b1 : b2 << 4 | ((0xf0 & b1) >> 4);
 }
-
 /* Copies the file starting at the sector in the FAT-12
  * filesystem in src_disk corresponding to index into the out file
  * on the host filesystem. */
