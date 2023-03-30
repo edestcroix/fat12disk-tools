@@ -12,7 +12,7 @@ typedef unsigned char byte;
 // byte sequence conversion functions
 ushort bytes_to_ushort(byte *bytes);
 char *bytes_to_filename(byte *bytes);
-struct tm bytes_to_time(byte *bytes);
+struct tm bytes_to_time(byte *time_bytes, byte *date_bytes);
 
 // byte sequence read functions
 byte *read_bytes(FILE *disk, int n, int address);

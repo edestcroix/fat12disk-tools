@@ -34,16 +34,20 @@ char *bytes_to_filename(byte *bytes) {
   return (char *)bytes;
 }
 
-// converts the 2 byte times from FAT-12 directories
-// into a time struct.
-struct tm bytes_to_time(byte *bytes) {
+// converts the times and dates from FAT-12 directories into a time struct.
+struct tm bytes_to_time(byte *time_bytes, byte *date_bytes) {
+  ushort times = *(ushort *)time_bytes;
+  ushort dates = *(ushort *)date_bytes;
   struct tm time;
-  time.tm_year = bytes[0] >> 1;
-  time.tm_mon = ((bytes[0] & 0x01) << 3) | (bytes[1] >> 5);
-  time.tm_mday = bytes[1] & 0x1F;
-  time.tm_hour = bytes[2] >> 3;
-  time.tm_min = ((bytes[2] & 0x07) << 3) | (bytes[3] >> 5);
-  time.tm_sec = (bytes[3] & 0x1F) * 2;
+  // FAT uses a different year offset.
+  time.tm_year = (dates >> 9) + 80;
+  // it also uses 1-12 for months, not 0-11.
+  time.tm_mon = ((dates >> 5) & 0x0F) - 1;
+  time.tm_mday = dates & 0x1F;
+  time.tm_hour = times >> 11;
+  time.tm_min = (times >> 5) & 0x3F;
+  // seconds are stored in 2-second increments.
+  time.tm_sec = (times & 0x1F) * 2;
   return time;
 }
 

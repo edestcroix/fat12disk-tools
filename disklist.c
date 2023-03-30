@@ -16,7 +16,7 @@ void print_dir(directory_t dir) {
     strncat(filename, (char *)dir.extension, 3);
   }
   printf("%-20s", filename);
-  struct tm creation_time = bytes_to_time(dir.creation_time);
+  struct tm creation_time = bytes_to_time(dir.creation_time, dir.creation_date);
   char creation_time_str[20];
   strftime(creation_time_str, 20, "%m/%d/%Y %H:%M:%S", &creation_time);
   printf("%s\n", creation_time_str);
