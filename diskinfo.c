@@ -18,15 +18,7 @@ void print_disk_label(FILE *disk) {
     } else if (skip != 1) {
       continue;
     }
-    // the disk label is the first directory entry
-    // with the attribute 0x08
-    if (dir.attribute == LABEL_MASK) {
-      printf("Disk Label: ");
-      for (int j = 0; j < 8; j++) {
-        printf("%c", dir.filename[j]);
-      }
-      printf("\n");
-    }
+    printf("Disk Label: %8.8s\n", dir.filename);
   }
   free(dirs);
 }
@@ -50,7 +42,6 @@ int main(int argc, char *argv[]) {
   print_disk_label(disk);
 
   ushort num_sectors = bytes_to_ushort(boot_buf + 19);
-  printf("Num sectors: %d\n", num_sectors);
   ushort bytes_per_sector = bytes_to_ushort(boot_buf + 11);
 
   printf("Total size: %d bytes\n", num_sectors * bytes_per_sector);
@@ -60,14 +51,7 @@ int main(int argc, char *argv[]) {
   printf("FAT size: %d\n", fat_size);
   byte *fat_table = fat_table_buf(disk);
 
-  int free_sectors = 0;
-  // the first 2 entries in the fat table are reserved,
-  // and there are 32 sectors that are not available for
-  // data storage which should be excluded.
-  for (int i = 2; i < num_sectors - 32; i++) {
-    free_sectors += (fat_entry(fat_table, i) == 0x000);
-  }
-  printf("Free size: %d bytes\n", free_sectors * bytes_per_sector);
+  printf("Free size: %d bytes\n", free_space(fat_table, num_sectors));
 
   directory_t *dirs = root_dirs(disk);
   dir_list_t dir_list = (dir_list_t){.dirs = dirs, .size = DIRS_IN_ROOT};

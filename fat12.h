@@ -65,3 +65,5 @@ byte *fat_table_buf(FILE *disk);
 // combines the filename and extension sections
 // of a directory entry into a single string.
 char *filename_ext(directory_t dir);
+
+int free_space(byte *fat_table, int num_sectors);

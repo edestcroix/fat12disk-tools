@@ -63,14 +63,14 @@ directory_t read_dir(FILE *disk, int address) {
 int should_skip_dir(directory_t dir) {
   if (dir.filename[0] == 0x00) {
     return 3;
+  } else if (dir.attribute == LABEL_MASK) {
+    return 1;
   } else if (dir.filename[0] == FILE_FREE) {
     return 2;
   } else if (bytes_to_ushort(dir.first_cluster) <= 1) {
     return 2;
   } else if (dir.filename[0] == DOT) {
     return 2;
-  } else if (dir.attribute == LABEL_MASK) {
-    return 1;
   } else {
     return 0;
   }
@@ -215,4 +215,15 @@ char *filename_ext(directory_t dir) {
   strncat(filename, ".", 2);
   strncat(filename, (char *)dir.extension, 3);
   return filename;
+}
+
+int free_space(byte *fat_table, int num_sectors) {
+  int free_sectors = 0;
+  // the first 2 entries in the fat table are reserved,
+  // and there are 32 sectors that are not available for
+  // data storage which should be excluded.
+  for (int i = 0; i < num_sectors; i++) {
+    free_sectors += (fat_entry(fat_table, i) == 0x000);
+  }
+  return (free_sectors - 32) * SECTOR_SIZE;
 }
