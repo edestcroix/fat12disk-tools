@@ -36,11 +36,9 @@ void print_disk_label(FILE *disk) {
     // the disk label is the first directory entry
     // with the attribute 0x08
     if (dir.attribute == 0x08) {
-      printf("Disk Label: ");
-      for (int j = 0; j < 8; j++) {
-        printf("%c", dir.filename[j]);
-      }
-      printf("\n");
+      char lable[9];
+      strncpy(lable, bytes_to_filename(dir.filename), 8);
+      printf("Disk Label: %s\n", lable);
     }
   }
   free(dirs);

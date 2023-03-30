@@ -59,10 +59,10 @@ void copy_file(FILE *src_disk, FILE *out, byte *fat_table, int index,
   free(sector);
 }
 
-directory_t *read_dir(FILE *disk, int address) {
-  directory_t *dir = malloc(sizeof(directory_t));
+directory_t read_dir(FILE *disk, int address) {
+  directory_t dir;
   fseek(disk, address, SEEK_SET);
-  fread(dir, sizeof(directory_t), 1, disk);
+  fread(&dir, sizeof(directory_t), 1, disk);
   return dir;
 }
 
@@ -79,12 +79,21 @@ directory_t *read_dirs(FILE *disk, int sector, int limit) {
     // check if the first byte of filename
     // is 0x00, in which case the rest of the
     // directory entries are empty
-    directory_t dir = *read_dir(disk, sector * 512 + i * 32);
+    directory_t dir = read_dir(disk, sector * 512 + i * 32);
     if (dir.filename[0] == 0xE5) {
       continue;
     } else if (dir.filename[0] == 0x00) {
+      // set the rest of the list to
+      // only 0x00 bytes, in case this bit
+      // of memory is being reused. Otherwise,
+      // the rest of the list might have old
+      // data in it.
+      memset(dir_list + add_at, 0x00, (limit - i) * sizeof(directory_t));
       break;
     } else {
+      if (bytes_to_int(dir.first_cluster, 2) <= 1) {
+        continue;
+      }
       // if the attribute is 0x0F, it's a long filename,
       // so skip it, and set the last_dir_lf flag
       if (dir.attribute == 0x0F) {
@@ -130,21 +139,21 @@ int count_files(FILE *disk, byte *fat_table, dir_list_t dirs) {
     directory_t dir = dir_list[i];
     if (dir.filename[0] == 0x00) {
       break;
-    }
-
-    if (!(dir.attribute & 0x10)) {
+    } else if (dir.filename[0] == 0xE5) {
+      continue;
+    } else if (dir.filename[0] == 0x2E) {
+      continue;
+    } else if (dir.attribute & 0x10) {
+      printf("dir: %s\n", dir.filename);
+      uint16_t index = bytes_to_int(dir.first_cluster, 2);
+      if (index > 1) {
+        dir_list_t next_dirs = dir_from_fat(disk, fat_table, index);
+        num += count_files(disk, fat_table, next_dirs);
+      }
+    } else if (!(dir.attribute & 0x10)) {
+      printf("file: %s\n", dir.filename);
       num++;
       continue;
-    }
-    if (dir.filename[0] == 0x2E) {
-      continue;
-    }
-    uint16_t index = bytes_to_int(dir.first_cluster, 2);
-    if (index > 1) {
-      char dirname[9];
-      strncpy(dirname, bytes_to_filename(dir.filename), 8);
-      dir_list_t next_dirs = dir_from_fat(disk, fat_table, index);
-      num += count_files(disk, fat_table, next_dirs);
     }
   }
   return num;

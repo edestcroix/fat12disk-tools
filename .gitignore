@@ -7,3 +7,5 @@ diskinfo
 *.JPG
 *.TXT
 *.TEX
+*.py
+*.PY
