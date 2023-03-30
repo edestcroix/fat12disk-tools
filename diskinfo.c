@@ -14,28 +14,14 @@ void print_os_name(FILE *disk) {
 
 void print_disk_label(FILE *disk) {
   // buf is the buffer containing the root directory
-  directory_t *dirs = root_dirs(disk);
-  for (int i = 0; i < DIRS_IN_ROOT; i++) {
     directory_t dir = dirs[i];
-    if (dir.filename[0] == 0x00) {
-      break;
-    }
     // the disk label is the first directory entry
     // with the attribute 0x08
-    if (dir.attribute & LABEL_MASK) {
-      printf("Disk Label: ");
-      for (int j = 0; j < 8; j++) {
-        printf("%c", dir.filename[j]);
-      }
-      printf("\n");
     }
   }
   free(dirs);
 }
 
-byte *buf_slice(byte *buf, int start, int end) {
-  byte *result = (byte *)malloc((end - start) * sizeof(byte));
-  memcpy(result, buf + start, end - start);
   return result;
 }
 
@@ -56,7 +42,6 @@ int main(int argc, char *argv[]) {
   int sectors_per_fat = bytes_to_int(boot_buf + 22, 2);
   int fat_size = sectors_per_fat * bytes_per_sector;
   printf("FAT size: %d\n", fat_size);
-
   byte *fat_table = fat_table_buf(disk);
 
   int free_sectors = 0;
@@ -65,7 +50,7 @@ int main(int argc, char *argv[]) {
   // reporting the same amount of free space as the fatcat thing
   // I found online to test with, but I don't know if that program
   // is correct or not.
-  for (int i = 0; i < fat_size * 2 / 3; i++) {
+  for (int i = 2; i < fat_size * 2 / 3; i++) {
     uint16_t entry = fat_entry(fat_table, i);
     if (entry == 0x000) {
       free_sectors++;
@@ -73,8 +58,9 @@ int main(int argc, char *argv[]) {
   }
   printf("Free size: %d bytes\n", (free_sectors)*bytes_per_sector);
 
+  int root_dir_size = 14 * 512, dirs_in_root = root_dir_size / 32;
   directory_t *dirs = root_dirs(disk);
-  dir_list_t dir_list = (dir_list_t){.dirs = dirs, .size = DIRS_IN_ROOT};
+  dir_list_t dir_list = (dir_list_t){.dirs = dirs, .size = dirs_in_root};
   printf("Total number of files: %d\n", count_files(disk, fat_table, dir_list));
 
   free(fat_table);
