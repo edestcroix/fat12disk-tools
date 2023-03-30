@@ -39,11 +39,11 @@ int print_dirs(directory_t *dirs, char dirname[9]) {
       // it means that get_dir_list has
       // stopped adding to the list here.
       zero_found = 1;
-    } else if (dir.filename[0] == 0xE5) {
+    } else if (dir.filename[0] == FILE_FREE) {
       continue;
-    } else if (dir.attribute == 0x10) {
+    } else if (dir.attribute == DIR_MASK) {
       // check if the dir is . or ..
-      if (dir.filename[0] == 0x2E) {
+      if (dir.filename[0] == DOT) {
         continue;
       }
       // only print the header if we have
@@ -82,10 +82,10 @@ int parse_dirs(FILE *disk, byte *fat_table, dir_list_t dirs, char dirname[9]) {
       break;
     }
 
-    if (!(dir.attribute & 0x10)) {
+    if (!(dir.attribute & DIR_MASK)) {
       continue;
     }
-    if (dir.filename[0] == 0x2E) {
+    if (dir.filename[0] == DOT) {
       continue;
     }
     uint16_t index = bytes_to_int(dir.first_cluster, 2);
@@ -101,10 +101,9 @@ int parse_dirs(FILE *disk, byte *fat_table, dir_list_t dirs, char dirname[9]) {
 
 int main(int argc, char *argv[]) {
   FILE *disk = fopen(argv[1], "rb");
-  int dirs_in_root = 14 * 512 / 32;
   byte *fat_table = fat_table_buf(disk);
   directory_t *dirs = root_dirs(disk);
-  dir_list_t dir_list = (dir_list_t){.dirs = dirs, .size = dirs_in_root};
+  dir_list_t dir_list = (dir_list_t){.dirs = dirs, .size = DIRS_IN_ROOT};
   parse_dirs(disk, fat_table, dir_list, "Root Dir");
   free(dir_list.dirs);
   fclose(disk);

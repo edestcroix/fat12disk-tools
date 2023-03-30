@@ -8,9 +8,10 @@
 #define SECTOR_SIZE 512
 #define SECTOR_OFFSET 31
 
+#define DIR_SIZE 32
 #define DIRS_PER_SECTOR 16
 
-#define LAST_SECTOR 0x0FF8
+#define LAST_SECTOR 0xFF8
 
 #define DIR_MASK 0x10
 #define LABEL_MASK 0x08
