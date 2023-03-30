@@ -57,11 +57,10 @@ int main(int argc, char *argv[]) {
 
   int free_sectors = 0;
 
-  // NOTE: Free space reporting has been (probably) fixed. It's now
-  // reporting the same amount of free space as the fatcat thing
-  // I found online to test with, but I don't know if that program
-  // is correct or not.
-  for (int i = 2; i < fat_size * 2 / 3; i++) {
+  // NOTE: Free space reporting is now the same
+  // as the WinImage tool that created the images,
+  // so I consider that correct.
+  for (int i = 2; i < 2848; i++) {
     uint16_t entry = fat_entry(fat_table, i);
     if (entry == 0x000) {
       free_sectors++;
