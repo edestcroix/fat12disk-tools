@@ -10,6 +10,7 @@ void print_dir(directory_t dir, char type, char dirname[9]) {
   printf("%-10d", bytes_to_int(dir.file_size, 4));
   // filename is 8 bytes, but not null-terminated.
   char filename[13];
+  memset(filename, 0, 12);
   strncpy(filename, bytes_to_filename(dir.filename), 8);
   if (type == 'F') {
     strncat(filename, ".", 2);
@@ -30,21 +31,26 @@ int print_dirs(directory_t *dirs, char dirname[9]) {
     // print the attribute as a hex value
     // padded to 2 digits
     if (dir.filename[0] == 0x00) {
-      // the only way to tell if we have reached the end of the
-      // directory list is if we hit a 0x00, because the directory list is not
-      // null-terminated. If we get 0x00 here, it means that get_dir_list has
+      // the only way to tell if we have
+      // reached the end of the directory
+      // list is if we hit a 0x00,
+      // because the directory list is not
+      // null-terminated. If we get 0x00 here,
+      // it means that get_dir_list has
       // stopped adding to the list here.
       zero_found = 1;
-    } else if (dir.filename[0] == FILE_FREE) {
+    } else if (dir.filename[0] == 0xE5) {
       continue;
-    } else if (dir.attribute & DIR_MASK) {
+    } else if (dir.attribute == 0x10) {
       // check if the dir is . or ..
-      if (dir.filename[0] == DOT) {
+      if (dir.filename[0] == 0x2E) {
         continue;
       }
-      // only print the header if we have made it to a valid directory
-      // that is not . or .. This way, we don't print the header
-      // for empty directories.
+      // only print the header if we have
+      // made it to a valid directory
+      // that is not . or .. This
+      // way, we don't print the header for empty
+      // directories.
       if (!header_printed) {
         printf("%s\n", dirname);
         printf("===================================================\n");
@@ -64,17 +70,22 @@ int print_dirs(directory_t *dirs, char dirname[9]) {
   return num;
 }
 
-void parse_dirs(FILE *disk, byte *fat_table, dir_list_t dirs, char dirname[9]) {
+int parse_dirs(FILE *disk, byte *fat_table, dir_list_t dirs, char dirname[9]) {
+  int num = 0;
+  int num_dirs = dirs.size;
   directory_t *dir_arr = dirs.dirs;
-  int num_dirs = dirs.size, i = 0, zero_found = 0;
-  print_dirs(dir_arr, dirname);
+  int i = 0, zero_found = 0;
+  num += print_dirs(dir_arr, dirname);
   for (int i = 0; i < num_dirs; i++) {
     directory_t dir = dir_arr[i];
     if (dir.filename[0] == 0x00) {
       break;
     }
-    if (!(dir.attribute & DIR_MASK) || dir.filename[0] == DOT ||
-        dir.filename[0] == FILE_FREE) {
+
+    if (!(dir.attribute & 0x10)) {
+      continue;
+    }
+    if (dir.filename[0] == 0x2E) {
       continue;
     }
     uint16_t index = bytes_to_int(dir.first_cluster, 2);
@@ -82,16 +93,18 @@ void parse_dirs(FILE *disk, byte *fat_table, dir_list_t dirs, char dirname[9]) {
       char dirname[9];
       strncpy(dirname, bytes_to_filename(dir.filename), 8);
       dir_list_t next_dirs = dir_from_fat(disk, fat_table, index);
-      parse_dirs(disk, fat_table, next_dirs, dirname);
+      num += parse_dirs(disk, fat_table, next_dirs, dirname);
     }
   }
+  return num;
 }
 
 int main(int argc, char *argv[]) {
   FILE *disk = fopen(argv[1], "rb");
+  int dirs_in_root = 14 * 512 / 32;
   byte *fat_table = fat_table_buf(disk);
-  dir_list_t dir_list =
-      (dir_list_t){.dirs = root_dirs(disk), .size = DIRS_IN_ROOT};
+  directory_t *dirs = root_dirs(disk);
+  dir_list_t dir_list = (dir_list_t){.dirs = dirs, .size = dirs_in_root};
   parse_dirs(disk, fat_table, dir_list, "Root Dir");
   free(dir_list.dirs);
   fclose(disk);

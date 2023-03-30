@@ -144,14 +144,12 @@ int count_files(FILE *disk, byte *fat_table, dir_list_t dirs) {
     } else if (dir.filename[0] == 0x2E) {
       continue;
     } else if (dir.attribute & 0x10) {
-      printf("dir: %s\n", dir.filename);
       uint16_t index = bytes_to_int(dir.first_cluster, 2);
       if (index > 1) {
         dir_list_t next_dirs = dir_from_fat(disk, fat_table, index);
         num += count_files(disk, fat_table, next_dirs);
       }
     } else if (!(dir.attribute & 0x10)) {
-      printf("file: %s\n", dir.filename);
       num++;
       continue;
     }
