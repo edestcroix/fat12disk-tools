@@ -9,17 +9,19 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+
 int main(int argc, char *argv[]) {
   FILE *disk = fopen(argv[1], "rb");
   char *target = argv[2];
-  int num_dirs = 14 * 512 / 32;
   directory_t *dirs = root_dirs(disk);
 
-  int found = 0;
-  for (int i = 0; i < num_dirs; i++) {
+  for (int i = 0; i < DIRS_IN_ROOT; i++) {
     directory_t dir = dirs[i];
     if (dir.filename[0] == 0x00) {
       break;
+    }
+    if (dir.filename[0] == FILE_FREE) {
+      continue;
     }
     char *filename = filename_ext(dir);
     if (strcmp(filename, target) == 0) {
@@ -31,13 +33,11 @@ int main(int argc, char *argv[]) {
       FILE *dest = fopen(filename, "wb");
       copy_file(disk, dest, fat_table, index, size);
       fclose(dest);
-      found = 1;
+      fclose(disk);
+      free(dirs);
+      printf("File %s copied to current directory.\n", target);
+      exit(0);
     }
   }
-  if (!found) {
-    printf("%s not found in root directory.\n", target);
-    exit(1);
-  } else {
-    printf("File %s copied to current directory.\n", target);
-  }
+  printf("%s not found in root directory.\n", target);
 }

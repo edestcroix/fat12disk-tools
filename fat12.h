@@ -1,6 +1,25 @@
 #include "byte.h"
 #include <stdio.h>
 
+#define ROOT 19
+#define ROOT_DIR_SIZE (14 * 512)
+#define DIRS_IN_ROOT 224
+
+#define SECTOR_SIZE 512
+#define SECTOR_OFFSET 31
+
+#define DIRS_PER_SECTOR 16
+
+#define LAST_SECTOR 0x0FF8
+
+#define DIR_MASK 0x10
+#define LABEL_MASK 0x08
+#define LONG_NAME 0x0F
+
+#define DOT 0x2E
+
+#define FILE_FREE 0xE5
+
 // FAT12 directory entry.
 typedef struct directory_t {
   byte filename[8];

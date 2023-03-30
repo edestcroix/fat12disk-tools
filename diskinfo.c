@@ -5,22 +5,6 @@
 #include <string.h>
 #include <unistd.h>
 
-/*
- his program is used to get the disk information from
-a FAT12 disk image, the name of which is given
-as an argument to the program
-
-it needds to retrieve the following:
-  - Os name
-- Disk label
-- Total size
-- Free size
-- Total number of files
-- Number of FAT copies
-- Sectors per FAT
-
-*/
-
 void print_os_name(FILE *disk) {
   // the os name is the first 8 bytes of the boot sector
   // the boot sector starts at byte 3
@@ -30,12 +14,15 @@ void print_os_name(FILE *disk) {
 
 void print_disk_label(FILE *disk) {
   // buf is the buffer containing the root directory
-  directory_t *dirs = sector_dirs(disk, 19);
-  for (int i = 0; i < 16; i++) {
+  directory_t *dirs = root_dirs(disk);
+  for (int i = 0; i < DIRS_IN_ROOT; i++) {
     directory_t dir = dirs[i];
+    if (dir.filename[0] == 0x00) {
+      break;
+    }
     // the disk label is the first directory entry
     // with the attribute 0x08
-    if (dir.attribute == 0x08) {
+    if (dir.attribute & LABEL_MASK) {
       printf("Disk Label: ");
       for (int j = 0; j < 8; j++) {
         printf("%c", dir.filename[j]);
@@ -55,9 +42,9 @@ int byte_str_to_int(char *str, int length) {
   return result;
 }
 
-char *buf_slice(byte *buf, int start, int end) {
-  char *result = (char *)malloc((end - start) * sizeof(char));
-  strncpy(result, (char *)buf + start, end - start);
+byte *buf_slice(byte *buf, int start, int end) {
+  byte *result = (byte *)malloc((end - start) * sizeof(byte));
+  memcpy(result, buf + start, end - start);
   return result;
 }
 
@@ -65,13 +52,10 @@ int main(int argc, char *argv[]) {
   FILE *disk = fopen(argv[1], "rb");
 
   byte *boot_buf = boot_sector_buf(disk);
-  byte *root_buf = read_bytes(disk, 512, 9728);
 
   // get the os name from the buffer
   printf("OS Name: %s\n", buf_slice(boot_buf, 3, 8));
   print_disk_label(disk);
-
-  free(root_buf);
 
   int num_sectors = bytes_to_int(boot_buf + 19, 2);
   int bytes_per_sector = bytes_to_int(boot_buf + 11, 2);
@@ -81,18 +65,16 @@ int main(int argc, char *argv[]) {
   int sectors_per_fat = bytes_to_int(boot_buf + 22, 2);
   int fat_size = sectors_per_fat * bytes_per_sector;
   printf("FAT size: %d\n", fat_size);
-  // the FAT table starts at sector 1, and since each sector
-  // is 512 bytes, the FAT table starts at byte 512
+
   byte *fat_table = fat_table_buf(disk);
 
-  // start with 23 unused sectors.
   int free_sectors = 0;
 
   // NOTE: Free space reporting has been (probably) fixed. It's now
   // reporting the same amount of free space as the fatcat thing
   // I found online to test with, but I don't know if that program
   // is correct or not.
-  for (int i = 2; i < fat_size * 2 / 3; i++) {
+  for (int i = 0; i < fat_size * 2 / 3; i++) {
     uint16_t entry = fat_entry(fat_table, i);
     if (entry == 0x000) {
       free_sectors++;
@@ -100,13 +82,13 @@ int main(int argc, char *argv[]) {
   }
   printf("Free size: %d bytes\n", (free_sectors)*bytes_per_sector);
 
-  int root_dir_size = 14 * 512, dirs_in_root = root_dir_size / 32;
   directory_t *dirs = root_dirs(disk);
-  dir_list_t dir_list = (dir_list_t){.dirs = dirs, .size = dirs_in_root};
+  dir_list_t dir_list = (dir_list_t){.dirs = dirs, .size = DIRS_IN_ROOT};
   printf("Total number of files: %d\n", count_files(disk, fat_table, dir_list));
 
   free(fat_table);
   free(boot_buf);
+  fclose(disk);
   printf("FAT copies: %d\n", boot_buf[16]);
   printf("Sectors per FAT: %d\n", sectors_per_fat);
 }
