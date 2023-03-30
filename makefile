@@ -5,18 +5,14 @@ COMPILE = $(COMPILER) $(CFLAGS)
 
 all: diskinfo disklist diskget
 
-diskget: diskget.c build/dir_utils.o build/byte.o build/fat12.o
+diskget: diskget.c build/byte.o build/fat12.o
 	$(COMPILER) $^ -o $@
 
-diskinfo: diskinfo.c build/dir_utils.o build/byte.o build/fat12.o
+diskinfo: diskinfo.c build/byte.o build/fat12.o
 	$(COMPILER) $^ -o $@
 
-disklist: disklist.c build/dir_utils.o build/byte.o build/fat12.o
+disklist: disklist.c build/byte.o build/fat12.o
 	$(COMPILER) $^ -o $@
-
-build/dir_utils.o: dir_utils.c dir_utils.h 
-	mkdir -p build
-	$(COMPILE) dir_utils.c -o $@
 
 build/byte.o: byte.c byte.h
 	mkdir -p build

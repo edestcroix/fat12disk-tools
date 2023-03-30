@@ -22,10 +22,27 @@ typedef struct buf_t {
   int size;
 } buf_t;
 
+typedef struct dir_list_t {
+  directory_t *dirs;
+  int size;
+} dir_list_t;
+
+uint16_t fat_entry(byte *fat_table, int n);
+
+// fucntions for various filesystem actions.
+void copy_file(FILE *src_disk, FILE *out, byte *fat_table, int index, int size);
+int count_files(FILE *disk, byte *fat_table, dir_list_t dirs);
+dir_list_t dir_from_fat(FILE *disk, byte *fat_table, int index);
+
+// functions for reading directories out of the filesystem
+directory_t *sector_dirs(FILE *disk, int sector);
+directory_t *root_dirs(FILE *disk);
+
+// helper functions for getting boot sector and
+// fat table buffers.
 byte *boot_sector_buf(FILE *disk);
 byte *fat_table_buf(FILE *disk);
-byte *root_dir_buf(FILE *disk);
-uint16_t fat_entry(byte *fat_table, int n);
+
+// combines the filename and extension sections
+// of a directory entry into a single string.
 char *filename_ext(directory_t dir);
-buf_t cluster_buf(FILE *disk, byte *fat_table, int index, int steps);
-void copy_file(FILE *src_disk, FILE *out, byte *fat_table, int index, int size);

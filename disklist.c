@@ -1,4 +1,4 @@
-#include "dir_utils.h"
+#include "fat12.h"
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -43,7 +43,7 @@ int print_dirs(directory_t *dirs, char dirname[9]) {
       continue;
     } else if (dir.attribute == 0x10) {
       // check if the dir is . or ..
-      if (is_parent_or_cur(dir)) {
+      if (dir.filename[0] == 0x2E) {
         continue;
       }
       // only print the header if we have
@@ -70,21 +70,14 @@ int print_dirs(directory_t *dirs, char dirname[9]) {
   return num;
 }
 
-int parse_dir_buf(FILE *disk, byte *fat_table, dir_buf_t dir_buf,
-                  char dirname[9]) {
-  // get all the subdirectories of the buf,
-  // if they are files, print their info,
-  // if they are directories, recurse
-
+int parse_dirs(FILE *disk, byte *fat_table, dir_list_t dirs, char dirname[9]) {
   int num = 0;
-  int num_dirs = dir_buf.size / 32;
-  directory_t *dirs = get_dir_list(dir_buf.buf, num_dirs);
+  int num_dirs = dirs.size;
+  directory_t *dir_arr = dirs.dirs;
   int i = 0, zero_found = 0;
-  num += print_dirs(dirs, dirname);
-  // go back through the dirs list
-  // and recurse on any directories
+  num += print_dirs(dir_arr, dirname);
   for (int i = 0; i < num_dirs; i++) {
-    directory_t dir = dirs[i];
+    directory_t dir = dir_arr[i];
     if (dir.filename[0] == 0x00) {
       break;
     }
@@ -92,26 +85,25 @@ int parse_dir_buf(FILE *disk, byte *fat_table, dir_buf_t dir_buf,
     if (!(dir.attribute & 0x10)) {
       continue;
     }
-    if (is_parent_or_cur(dir)) {
+    if (dir.filename[0] == 0x2E) {
       continue;
     }
     uint16_t index = bytes_to_int(dir.first_cluster, 2);
     if (index > 1) {
-      dir_buf_t next_buf = dir_buf_from_fat(disk, fat_table, index);
       char dirname[9];
       strncpy(dirname, bytes_to_filename(dir.filename), 8);
-      num += parse_dir_buf(disk, fat_table, next_buf, dirname);
+      dir_list_t next_dirs = dir_from_fat(disk, fat_table, index);
+      num += parse_dirs(disk, fat_table, next_dirs, dirname);
     }
   }
-  free(dirs);
   return num;
 }
 
 int main(int argc, char *argv[]) {
   FILE *disk = fopen(argv[1], "rb");
-  int root_dir_size = 14 * 512;
-  byte *root_dir = root_dir_buf(disk);
+  int dirs_in_root = 14 * 512 / 32;
   byte *fat_table = fat_table_buf(disk);
-  dir_buf_t root_buf = (dir_buf_t){.buf = root_dir, .size = root_dir_size};
-  parse_dir_buf(disk, fat_table, root_buf, "Root Dir");
+  directory_t *dirs = root_dirs(disk);
+  dir_list_t dir_list = (dir_list_t){.dirs = dirs, .size = dirs_in_root};
+  parse_dirs(disk, fat_table, dir_list, "Root Dir");
 }

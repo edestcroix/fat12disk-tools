@@ -1,4 +1,4 @@
-#include "dir_utils.h"
+#include "fat12.h"
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -28,9 +28,9 @@ void print_os_name(FILE *disk) {
   printf("OS Name: %s\n", os_name);
 }
 
-void print_disk_label(byte *buf) {
+void print_disk_label(FILE *disk) {
   // buf is the buffer containing the root directory
-  directory_t *dirs = get_dir_list(buf, 16);
+  directory_t *dirs = sector_dirs(disk, 19);
   for (int i = 0; i < 16; i++) {
     directory_t dir = dirs[i];
     // the disk label is the first directory entry
@@ -69,7 +69,7 @@ int main(int argc, char *argv[]) {
 
   // get the os name from the buffer
   printf("OS Name: %s\n", buf_slice(boot_buf, 3, 8));
-  print_disk_label(root_buf);
+  print_disk_label(disk);
 
   free(root_buf);
 
@@ -99,12 +99,13 @@ int main(int argc, char *argv[]) {
     }
   }
   printf("Free size: %d bytes\n", (free_sectors)*bytes_per_sector);
-  byte *root_dir = root_dir_buf(disk);
-  dir_buf_t root_dir_buf = (dir_buf_t){.buf = root_dir, .size = 14 * 512};
-  printf("Number of files: %d\n", count_files(disk, fat_table, root_dir_buf));
+
+  int root_dir_size = 14 * 512, dirs_in_root = root_dir_size / 32;
+  directory_t *dirs = root_dirs(disk);
+  dir_list_t dir_list = (dir_list_t){.dirs = dirs, .size = dirs_in_root};
+  printf("Total number of files: %d\n", count_files(disk, fat_table, dir_list));
 
   free(fat_table);
-  free(root_dir);
   free(boot_buf);
   printf("FAT copies: %d\n", boot_buf[16]);
   printf("Sectors per FAT: %d\n", sectors_per_fat);
