@@ -6,10 +6,9 @@
  * - Fix timestamps not being set correctly
  *   */
 
-// FIXME: Somwhere, something isn't working right
-// every time, and the FAT table is getting screwed up
 ushort next_free_index(fat_table_t fat, int index) {
-  // starting at index, search the fat table for the next free sector,
+  // starting at index+1, search the fat table for the next free sector,
+  // because the current index might not be updated yet.
   for (int i = index + 1; i < fat.valid_sectors; i++) {
     ushort entry = fat_entry(fat.table, i);
     if (entry == 0) {
@@ -34,29 +33,19 @@ void update_fat_table(byte *fat_table, ushort value, int index) {
 
 void write_file(FILE *src_file, FILE *dest_disk, fat12_t fat12, int index,
                 int size) {
-  ushort next_index = next_free_index(fat12.fat, index);
-  int sector = index + SECTOR_OFFSET;
-  int sector_addr = sector * 512;
-  if (size < 512) {
-    // last sector of the file.
-    char buf[size];
-    fread(buf, 1, size, src_file);
-    fseek(dest_disk, sector_addr, SEEK_SET);
-    fwrite(buf, 1, size, dest_disk);
-    update_fat_table(fat12.fat.table, 0xFFF, index);
-  } else {
-    char *buf = malloc(sizeof(char) * 512);
-    fread(buf, 1, 512, src_file);
-    fseek(dest_disk, sector_addr, SEEK_SET);
-    fwrite(buf, 1, 512, dest_disk);
-    free(buf);
-    // since write_file is called again after writing,
-    // the file pointer for src_file should be moved
-    // to the correct place.
+  ushort next_index =
+      (size < SECTOR_SIZE) ? 0xFFF : next_free_index(fat12.fat, index);
+  int write_size = (size < SECTOR_SIZE) ? size : SECTOR_SIZE;
+  int sector = (index + SECTOR_OFFSET) * SECTOR_SIZE;
+  // last sector of the file.
+  char buf[write_size];
+  fread(buf, 1, write_size, src_file);
+  fseek(dest_disk, sector, SEEK_SET);
+  fwrite(buf, 1, write_size, dest_disk);
+  if (!(size < 512)) {
     write_file(src_file, dest_disk, fat12, next_index, size - 512);
-    update_fat_table(fat12.fat.table, next_index, index);
   }
-  printf("Index: %d ", index);
+  update_fat_table(fat12.fat.table, next_index, index);
 }
 
 // TODO: This is also trash. And the times are completely wrong.
