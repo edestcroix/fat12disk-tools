@@ -37,9 +37,11 @@ int main(int argc, char *argv[]) {
   // get the os name from the buffer
   printf("OS Name: %s\n", buf_slice(boot_buf, 3, 8));
 
-  // TODO: Check the boot sector for the label first,
-  // before checking the root directory.
-  print_disk_label(disk);
+  if (boot_buf[43] != 0x20 && boot_buf[43] != 0x00) {
+    printf("Disk Label: %11.11s\n", boot_buf + 43);
+  } else {
+    print_disk_label(disk);
+  }
 
   ushort num_sectors = bytes_to_ushort(boot_buf + 19);
   ushort bytes_per_sector = bytes_to_ushort(boot_buf + 11);
