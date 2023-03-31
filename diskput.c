@@ -31,9 +31,6 @@ void update_fat_table(byte *fat_table, ushort value, int index) {
   // return (n % 2 == 0) ? ((0x00f & b2) << 8) | b1 : b2 << 4 | ((0xf0 & b1) >>
   // 4);
 
-  printf("Old bytes: %x, %x\n", fat_table[index * 3 / 2],
-         fat_table[index * 3 / 2 + 1]);
-
   if (index % 2 == 0) {
     // lower byte goes at index *3/2
     fat_table[3 * index / 2] = (byte)(value & 0x00ff);
@@ -47,22 +44,15 @@ void update_fat_table(byte *fat_table, ushort value, int index) {
     // lower 4 bits go at index *3/2 + 1
     fat_table[3 * index / 2 + 1] = (byte)((value & 0xff0) >> 4);
   }
-  printf("New bytes: %x, %x\n", fat_table[index * 3 / 2],
-         fat_table[index * 3 / 2 + 1]);
 }
 
 void write_file(FILE *src_file, FILE *dest_disk, byte *fat_table, int index,
                 int size) {
   ushort next_index = next_free_index(fat_table, index);
-  printf("next index: %d\n", next_index);
   int sector = index + SECTOR_OFFSET;
   int sector_addr = sector * 512;
-  printf("sector: %d\n", sector);
-  printf("size_left: %d\n", size);
   if (size < 512) {
     // last sector of the file.
-    printf("at last sector of file.\n");
-    printf("writing to sector: %d\n", sector);
     char buf[size];
     fread(buf, 1, size, src_file);
     fseek(dest_disk, sector_addr, SEEK_SET);
@@ -71,7 +61,6 @@ void write_file(FILE *src_file, FILE *dest_disk, byte *fat_table, int index,
   } else {
     char *buf = malloc(sizeof(char) * 512);
     fread(buf, 1, 512, src_file);
-    printf("writing to sector: %d\n", sector);
     fseek(dest_disk, sector_addr, SEEK_SET);
     fwrite(buf, 1, 512, dest_disk);
     free(buf);
@@ -87,7 +76,7 @@ void add_dir_entry(dir_list_t dirs, char *filename, uint size, int cluster) {
   directory_t dir;
   directory_t *dir_buf = dirs.dirs;
   int i = 0;
-  printf("filename: %s\n", filename);
+  printf("Filename: %s\n", filename);
   while (i < 13) {
     if (filename[i] == '.') {
       break;
@@ -99,7 +88,6 @@ void add_dir_entry(dir_list_t dirs, char *filename, uint size, int cluster) {
   memset(dir.filename + i, 0x20, 8 - i);
   memcpy(dir.extension, filename + i + 1, 3);
   dir.attribute = 0x20;
-  printf("Times\n");
   time_t t = time(NULL);
   struct tm time = *localtime(&t);
   // format the time and date into the dir struct
@@ -117,8 +105,7 @@ void add_dir_entry(dir_list_t dirs, char *filename, uint size, int cluster) {
   for (int i = 0; i < 4; i++) {
     dir.file_size[i] = (size >> (i * 8)) & 0xff;
   }
-  printf("filesize %d\n", size);
-  printf("size: %d\n", bytes_to_uint(dir.file_size));
+  printf("Size: %d\n", bytes_to_uint(dir.file_size));
 
   // interate through the directory buffer and find the first empty entry
   for (int i = 0; i < dirs.size; i++) {
@@ -181,14 +168,12 @@ int main(int argc, char *argv[]) {
       exit(1);
     }
     ushort free_index = next_free_index(fat_table, 2);
-    printf("free index: %d\n", free_index);
+    printf("writing to disk\n");
     write_file(source, disk, fat_table, free_index, source_size);
     dir_list_t dir_list = {.dirs = dirs, .size = DIRS_IN_ROOT};
-    printf("Write Complete\n");
     add_dir_entry(dir_list, filename, source_size, free_index);
     // write the updated directory entries to the disk
     fseek(disk, 512 * 19, SEEK_SET);
-    printf("writing to disk\n");
     fwrite(dirs, sizeof(directory_t), DIRS_IN_ROOT, disk);
     // write the FAT table to the disk
     byte *boot_sector = boot_sector_buf(disk);
@@ -196,9 +181,11 @@ int main(int argc, char *argv[]) {
     int reserved_sectors = boot_sector[14] + (boot_sector[15] << 8);
     int fat_start = reserved_sectors;
     int fat_size_bytes = fat_size * SECTOR_SIZE;
+    printf("Write Complete\nUpdating FAT table\n");
     printf("fat_size: %d\n", fat_size_bytes);
     fseek(disk, fat_start * SECTOR_SIZE, SEEK_SET);
     fwrite(fat_table, 1, fat_size_bytes, disk);
+    printf("Complete\n");
   }
 
   return 0;
