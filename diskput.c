@@ -6,6 +6,8 @@
  * - Fix timestamps not being set correctly
  *   */
 
+// FIXME: Somwhere, something isn't working right
+// every time, and the FAT table is getting screwed up
 ushort next_free_index(fat_table_t fat, int index) {
   // starting at index, search the fat table for the next free sector,
   for (int i = index + 1; i < fat.valid_sectors; i++) {
@@ -19,29 +21,13 @@ ushort next_free_index(fat_table_t fat, int index) {
 }
 
 void update_fat_table(byte *fat_table, ushort value, int index) {
-  // this will suck.
-
-  // the position in the fat table is index *3/2. If index is even,
-  // the lower byte of the value goes at this position, and
-  // the upper 4 bits are stored in the upper four bits at
-  // index *3/2 +1. If index is odd, the upper byte of the value
-  // goes at this position, and the lower 4 bits go into the
-  // lower 4 bits of the byte at index *3/2 + 1.
-  // basically, reverse this:
-  // return (n % 2 == 0) ? ((0x00f & b2) << 8) | b1 : b2 << 4 | ((0xf0 & b1) >>
-  // 4);
-
   if (index % 2 == 0) {
-    // lower byte goes at index *3/2
     fat_table[3 * index / 2] = (byte)(value & 0x00ff);
-    // upper 4 bits go at index *3/2 + 1
     fat_table[3 * index / 2 + 1] &= 0xf0;
     fat_table[3 * index / 2 + 1] |= (byte)((value & 0x0f00) >> 8);
   } else {
-    // upper byte goes at index *3/2
     fat_table[3 * index / 2] &= 0x0f;
     fat_table[3 * index / 2] |= (byte)((value & 0x000f) << 4);
-    // lower 4 bits go at index *3/2 + 1
     fat_table[3 * index / 2 + 1] = (byte)((value & 0xff0) >> 4);
   }
 }
@@ -70,6 +56,7 @@ void write_file(FILE *src_file, FILE *dest_disk, fat12_t fat12, int index,
     write_file(src_file, dest_disk, fat12, next_index, size - 512);
     update_fat_table(fat12.fat.table, next_index, index);
   }
+  printf("Index: %d ", index);
 }
 
 // TODO: This is also trash. And the times are completely wrong.
@@ -102,6 +89,7 @@ void add_dir_entry(FILE *disk, dir_list_t dirs, char *filename, uint size,
   // shift the cluster value into little-endian
   for (int i = 0; i < 2; i++) {
     dir.first_cluster[i] = (cluster >> (i * 8)) & 0xff;
+    printf("Cluster: %d\n", bytes_to_ushort(dir.first_cluster));
   }
   // do the same for size
   for (int i = 0; i < 4; i++) {
@@ -117,6 +105,13 @@ void add_dir_entry(FILE *disk, dir_list_t dirs, char *filename, uint size,
       return;
     }
   }
+  // NOTE: If there is no room for a new directory entry,
+  // make sure to fail and exit immediatly, so that
+  // the FAT table is not updated. This way, the
+  // sector that was supposed to be written to will
+  // get overwritten later; as long as the fat table
+  // is not updated, and there isn't a directory entry,
+  // the copied file effectively doesn't exist.
 }
 
 ushort copy_to_root(FILE *disk, FILE *source, fat12_t fat12, char *filename,
@@ -177,7 +172,8 @@ int main(int argc, char *argv[]) {
   // write the updated directory entries to the disk
   // write the FAT table to the disk
   printf("Write Complete\nUpdating FAT table\n");
-  fwrite(fat12.fat.table, 1, fat12.fat.size, disk);
+  fseek(disk, 512 * 1, SEEK_SET);
+  fwrite(fat12.fat.table, fat12.fat.size, 1, disk);
   fseek(disk, 512 * 19, SEEK_SET);
   fwrite(fat12.root.dirs, sizeof(directory_t), DIRS_IN_ROOT, disk);
   printf("Complete\n");
