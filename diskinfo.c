@@ -28,36 +28,29 @@ byte *buf_slice(byte *buf, int start, int end) {
 int main(int argc, char *argv[]) {
   FILE *disk = fopen(argv[1], "rb");
 
-  byte *boot_buf = boot_sector_buf(disk);
+  fat12_t fat12 = fat12_from_file(disk);
 
   // get the os name from the buffer
-  printf("OS Name: %s\n", buf_slice(boot_buf, 3, 8));
+  printf("OS Name: %s\n", buf_slice(fat12.boot_sector, 3, 8));
 
-  if (boot_buf[43] != 0x20 && boot_buf[43] != 0x00) {
-    printf("Disk Label: %11.11s\n", boot_buf + 43);
+  if (fat12.boot_sector[43] != 0x20 && fat12.boot_sector[43] != 0x00) {
+    printf("Disk Label: %11.11s\n", fat12.boot_sector + 43);
   } else {
     print_disk_label(disk);
   }
 
-  ushort num_sectors = bytes_to_ushort(boot_buf + 19);
-  ushort bytes_per_sector = bytes_to_ushort(boot_buf + 11);
-  free(boot_buf);
+  printf("Total size: %d bytes\n", fat12.total_size);
 
-  printf("Total size: %d bytes\n", num_sectors * bytes_per_sector);
+  printf("FAT size: %d\n", fat12.fat.size);
 
-  ushort sectors_per_fat = bytes_to_ushort(boot_buf + 22);
-  int fat_size = sectors_per_fat * bytes_per_sector;
-  printf("FAT size: %d\n", fat_size);
-  byte *fat_table = fat_table_buf(disk);
+  printf("Free size: %d bytes\n", fat12.free_space);
 
-  printf("Free size: %d bytes\n", free_space(fat_table, num_sectors));
-
-  directory_t *dirs = root_dirs(disk);
-  dir_list_t dir_list = (dir_list_t){.dirs = dirs, .size = DIRS_IN_ROOT};
-  printf("Total number of files: %d\n", count_files(disk, fat_table, dir_list));
-
-  free(fat_table);
+  printf("Total number of files: %d\n",
+         count_files(disk, fat12.fat.table, fat12.root));
   fclose(disk);
-  printf("FAT copies: %d\n", boot_buf[16]);
-  printf("Sectors per FAT: %d\n", sectors_per_fat);
+
+  printf("FAT copies: %d\n", fat12.boot_sector[16]);
+  printf("Sectors per FAT: %d\n", bytes_to_ushort(fat12.boot_sector + 22));
+  free(fat12.boot_sector);
+  free(fat12.fat.table);
 }

@@ -60,6 +60,7 @@ typedef struct fat12_t {
   uint sector_size;
   uint num_files;
   uint free_space;
+  uint total_size;
 } fat12_t;
 
 ushort fat_entry(byte *fat_table, int n);

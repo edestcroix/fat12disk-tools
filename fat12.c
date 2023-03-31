@@ -150,14 +150,13 @@ int count_files(FILE *disk, byte *fat_table, dir_list_t dirs) {
         if (index > 1) {
           dir_list_t next_dirs = dir_from_fat(disk, fat_table, index);
           num += count_files(disk, fat_table, next_dirs);
-          free(next_dirs.dirs);
         }
       } else {
         num++;
       }
     }
   }
-  free(dir_list);
+  free(dirs.dirs);
   return num;
 }
 
@@ -254,15 +253,16 @@ fat12_t fat12_from_file(FILE *disk) {
   fat_table_t fat = fat_table(disk);
   dir_list_t root_list = {.dirs = root, .size = 224};
   int num_sectors = boot_sector[19] + (boot_sector[20] << 8);
+  ushort bytes_per_sector = bytes_to_ushort(boot_sector + 11);
   int free_space_bytes = free_space(fat.table, num_sectors);
-  fat12_t fat12;
   int fat_size = boot_sector[22] + (boot_sector[23] << 8);
   fat_size *= SECTOR_SIZE;
-  fat12.boot_sector = boot_sector;
-  fat12.fat = fat;
-  fat12.root = root_list;
-  fat12.num_sectors = num_sectors;
-  fat12.free_space = free_space_bytes;
+  fat12_t fat12 = {.boot_sector = boot_sector,
+                   .fat = fat,
+                   .root = root_list,
+                   .num_sectors = num_sectors,
+                   .free_space = free_space_bytes,
+                   .total_size = num_sectors * bytes_per_sector};
   return fat12;
 }
 
