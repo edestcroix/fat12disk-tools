@@ -6,9 +6,9 @@
 /* Converts the little-endian byte sequence
  * provided into the integer value it represents.
  * size is the number of bytes in the sequence. */
-unsigned int bytes_to_int(byte *bytes, int size) {
+uint bytes_to_uint(byte *bytes) {
   unsigned int result = 0;
-  for (int i = 0; i < size; i++) {
+  for (int i = 0; i < 4; i++) {
     result += bytes[i] << (8 * i);
   }
   return result;
@@ -36,8 +36,9 @@ char *bytes_to_filename(byte *bytes) {
 
 // converts the times and dates from FAT-12 directories into a time struct.
 struct tm bytes_to_time(byte *time_bytes, byte *date_bytes) {
-  ushort times = *(ushort *)time_bytes;
-  ushort dates = *(ushort *)date_bytes;
+  // some funky pointer casting because we need the extra space
+  // of a ushort for bit shifting without overflow.
+  ushort times = *(ushort *)time_bytes, dates = *(ushort *)date_bytes;
   struct tm time;
   // FAT uses a different year offset.
   time.tm_year = (dates >> 9) + 80;

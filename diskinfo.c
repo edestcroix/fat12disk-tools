@@ -1,3 +1,6 @@
+/* Prints information about the FAT12 file system on a disk image. Information
+ * includes the OS name, disk label, total disk size, FAT table size, free
+ * space, number of files, FAT copies, and sectors per FAT. */
 #include "fat12.h"
 
 void print_os_name(FILE *disk) {
@@ -45,6 +48,7 @@ int main(int argc, char *argv[]) {
 
   ushort num_sectors = bytes_to_ushort(boot_buf + 19);
   ushort bytes_per_sector = bytes_to_ushort(boot_buf + 11);
+  free(boot_buf);
 
   printf("Total size: %d bytes\n", num_sectors * bytes_per_sector);
 
@@ -60,7 +64,6 @@ int main(int argc, char *argv[]) {
   printf("Total number of files: %d\n", count_files(disk, fat_table, dir_list));
 
   free(fat_table);
-  free(boot_buf);
   fclose(disk);
   printf("FAT copies: %d\n", boot_buf[16]);
   printf("Sectors per FAT: %d\n", sectors_per_fat);

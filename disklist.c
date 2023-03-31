@@ -1,21 +1,17 @@
+/* Reads the FAT12 filesystem on a floppy disk image and prints
+ * the directory structure. Completely ignores all long
+ * filenames, and with neither print a long file name,
+ * nor print file inside a directory with a long file name. */
 #include "fat12.h"
 
 /* prints F/D for files/subdirectories, and
  * the file size, (0 for subdirs), the filename,
  * and file creation date. */
 void print_dir(directory_t dir) {
-  char type = (dir.attribute & DIR_MASK) ? 'D' : 'F';
-  printf("%c ", type);
-  printf("%-10d", bytes_to_ushort(dir.file_size));
-  // filename is 8 bytes, but not null-terminated.
-  char filename[13];
-  memset(filename, 0, 12);
-  strncpy(filename, bytes_to_filename(dir.filename), 8);
-  if (type == 'F') {
-    strncat(filename, ".", 2);
-    strncat(filename, (char *)dir.extension, 3);
-  }
-  printf("%-20s", filename);
+  char type = dir.attribute & DIR_MASK ? 'D' : 'F';
+  printf("%c %-10d%-20s", type, bytes_to_uint(dir.file_size),
+         filename_ext(dir));
+
   struct tm creation_time = bytes_to_time(dir.creation_time, dir.creation_date);
   char creation_time_str[20];
   strftime(creation_time_str, 20, "%m/%d/%Y %H:%M:%S", &creation_time);
@@ -57,15 +53,10 @@ void parse_dirs(FILE *disk, byte *fat_table, dir_list_t dirs, char dirname[9]) {
     case 3:
       return;
     default:
-      if (!(dir.attribute & DIR_MASK)) {
-        continue;
-      }
-      ushort index = bytes_to_ushort(dir.first_cluster);
-      if (index > 1) {
-        char dirname[9];
-        strncpy(dirname, bytes_to_filename(dir.filename), 8);
+      if ((dir.attribute & DIR_MASK)) {
+        ushort index = bytes_to_ushort(dir.first_cluster);
         dir_list_t next_dirs = dir_from_fat(disk, fat_table, index);
-        parse_dirs(disk, fat_table, next_dirs, dirname);
+        parse_dirs(disk, fat_table, next_dirs, bytes_to_filename(dir.filename));
       }
     }
   }

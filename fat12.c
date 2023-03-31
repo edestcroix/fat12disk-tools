@@ -1,13 +1,12 @@
 /* File containing utilites for interacting with fat12 disk images. */
 #include "fat12.h"
 
-/* checks if the index from the FAT table is
- * the value(s) that indicate the end of a file.
- * Additionally, throws error if index is <= 0,
- * as this should never be encountered normally. */
+/* checks if the index from the FAT table is the value(s) that indicate the end
+ * of a file. Additionally, throws error if index is <= 1, as this should never
+ * be encountered normally. */
 int last_sector(int index, char *exit_msg) {
-  if (index <= 0) {
-    printf("Error at %s: empty sector.\n", exit_msg);
+  if (index <= 1) {
+    printf("Error at %s: reserved or invalid FAT entry.\n", exit_msg);
     exit(1);
   }
   return index >= LAST_SECTOR;
@@ -19,12 +18,11 @@ byte *read_sector(FILE *disk, int sector_num) {
   return read_bytes(disk, SECTOR_SIZE, sector_num * SECTOR_SIZE);
 }
 
-/* Retrieves the 12-bit value stored in the fat table at index n.
- * If n is even, the lower byte of the index is b1, and the
- * remaining 4 bits are the upper 4 bits of b2. (the bits from b2
- * are shifted right 8 bits to be added to b1 using logical OR.)
- * If n is odd, the upper 4 bits of b1 are the lower 4 bits of the index,
- * and b2 is the upper byte of the index. (b2 gets shifted left 4
+/* Retrieves the 12-bit value stored in the fat table at index n. If n is even,
+ * the lower byte of the index is b1, and the remaining 4 bits are the upper 4
+ * bits of b2. (the bits from b2 are shifted right 8 bits to be added to b1
+ * using logical OR.) If n is odd, the upper 4 bits of b1 are the lower 4 bits
+ * of the index, and b2 is the upper byte of the index. (b2 gets shifted left 4
  * bits to make room for the bits from b1) */
 ushort fat_entry(byte *fat_table, int n) {
   ushort b1 = fat_table[3 * n / 2], b2 = fat_table[3 * n / 2 + 1];
@@ -54,8 +52,7 @@ directory_t read_dir(FILE *disk, int address) {
   return dir;
 }
 
-/* Returns status code to determine whether
- * a directory entry should be skipped.
+/* Returns status code to determine whether a directory entry should be skipped.
  * 0: do not skip
  * 1: volume_label (sometimes this shouldn't be skipped)
  * 2: free entry, skip
@@ -63,10 +60,10 @@ directory_t read_dir(FILE *disk, int address) {
 int should_skip_dir(directory_t dir) {
   if (dir.filename[0] == 0x00) {
     return 3;
-  } else if (dir.attribute == LABEL_MASK) {
-    return 1;
   } else if (dir.filename[0] == FILE_FREE) {
     return 2;
+  } else if (dir.attribute & LABEL_MASK) {
+    return 1;
   } else if (bytes_to_ushort(dir.first_cluster) <= 1) {
     return 2;
   } else if (dir.filename[0] == DOT) {
@@ -76,19 +73,18 @@ int should_skip_dir(directory_t dir) {
   }
 }
 
-// allows reading limit amount of directory entries from
-// the sector specified. Allows reading arbitrary number of
-// directory entriess, so it is not exposed outside this
-// file, only through wrapper functions that impose
-// limits on the number of directory entries that can be read.
+/* Allows reading "limit" amount of directory entries from the sector specified.
+ * It allows reading an arbitrary number of directory entriess, so it is not
+ * exposed outside this file, only through wrapper functions that impose limits
+ * on the number of directory entries that can be read. */
 directory_t *read_dirs(FILE *disk, int sector, int limit) {
   directory_t *dir_list = malloc(limit * sizeof(directory_t));
-  int add_at = 0;
-  int last_dir_lf = 0;
+  int add_at = 0, last_dir_lf = 0;
   for (int i = 0; i < limit; i++) {
     directory_t dir = read_dir(disk, sector * SECTOR_SIZE + i * DIR_SIZE);
     switch (should_skip_dir(dir)) {
-    // only case 2 and 3 should be skipped.
+    // only case 2 and 3 should be skipped. Don't skip volume lables,
+    // because sometimes other functions need them.
     case 2:
       continue;
     case 3:
@@ -143,6 +139,7 @@ int count_files(FILE *disk, byte *fat_table, dir_list_t dirs) {
     case 1 ... 2:
       continue;
     case 3:
+      free(dir_list);
       return num;
     default:
       if (dir.attribute & DIR_MASK) {
@@ -150,48 +147,48 @@ int count_files(FILE *disk, byte *fat_table, dir_list_t dirs) {
         if (index > 1) {
           dir_list_t next_dirs = dir_from_fat(disk, fat_table, index);
           num += count_files(disk, fat_table, next_dirs);
+          free(next_dirs.dirs);
         }
       } else if (!(dir.attribute & DIR_MASK)) {
         num++;
         continue;
       }
-      break;
     }
   }
+  free(dir_list);
   return num;
 }
 
-/* Creates a list of directory_t structs contained in
- * the directory starting at index in the FAT Table
- * Reads all the directories from the sector into
- * the list, then recurses into the next sector. */
+/* Creates a list of directory_t structs contained in the directory starting at
+ * index in the FAT Table Reads all the directories from the sector into the
+ * list, then recurses into the next sector. */
 dir_list_t dir_from_fat(FILE *disk, byte *fat_table, int index) {
   ushort next_index = fat_entry(fat_table, index);
   int sector_num = 33 + index - 2;
 
+  directory_t *dirs = sector_dirs(disk, sector_num);
   if (last_sector(next_index, "dir_from_fat")) {
-    directory_t *dirs = sector_dirs(disk, sector_num);
-    dir_list_t dir_list;
-    dir_list.dirs = dirs;
-    dir_list.size = 16;
+    dir_list_t dir_list = {.dirs = dirs, .size = 16};
     return dir_list;
   }
 
-  directory_t *dirs = sector_dirs(disk, sector_num);
-  dir_list_t dir_list;
   dir_list_t next_dir_list = dir_from_fat(disk, fat_table, next_index);
-  dir_list.dirs = malloc((16 + next_dir_list.size) * sizeof(directory_t));
-  dir_list.size = 16 + next_dir_list.size;
+
+  dir_list_t dir_list = {
+      .dirs = malloc((16 + next_dir_list.size) * sizeof(directory_t)),
+      .size = 16 + next_dir_list.size};
+
   memcpy(dir_list.dirs, dirs, 16 * sizeof(directory_t));
   memcpy(dir_list.dirs + 16, next_dir_list.dirs,
          next_dir_list.size * sizeof(directory_t));
   free(dirs);
+  free(next_dir_list.dirs);
   return dir_list;
 }
 
 byte *boot_sector_buf(FILE *disk) {
   fseek(disk, 0, SEEK_SET);
-  byte *buf = (byte *)malloc(SECTOR_SIZE * sizeof(byte));
+  byte *buf = malloc(SECTOR_SIZE * sizeof(byte));
   fread(buf, SECTOR_SIZE, 1, disk);
   return buf;
 }
@@ -202,16 +199,20 @@ byte *fat_table_buf(FILE *disk) {
   int reserved_sectors = boot_sector[14] + (boot_sector[15] << 8);
   int fat_start = reserved_sectors;
   int fat_size_bytes = fat_size * SECTOR_SIZE;
-  byte *fat_table = (byte *)malloc(fat_size_bytes * sizeof(byte));
+  byte *fat_table = malloc(fat_size_bytes * sizeof(byte));
   fseek(disk, SECTOR_SIZE * fat_start, SEEK_SET);
   fread(fat_table, fat_size_bytes, 1, disk);
+  free(boot_sector);
   return fat_table;
 }
 
 char *filename_ext(directory_t dir) {
-  char *filename = (char *)malloc(13 * sizeof(char));
+  char *filename = malloc(13 * sizeof(char));
   memset(filename, 0, 12);
   strncpy(filename, bytes_to_filename(dir.filename), 8);
+  if (dir.extension[0] == 0x20) {
+    return filename;
+  }
   strncat(filename, ".", 2);
   strncat(filename, (char *)dir.extension, 3);
   return filename;

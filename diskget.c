@@ -10,7 +10,7 @@ int main(int argc, char *argv[]) {
   for (int i = 0; i < DIRS_IN_ROOT; i++) {
     directory_t dir = dirs[i];
     switch (should_skip_dir(dir)) {
-    case 2:
+    case 1 ... 2:
       continue;
     case 3:
       printf("%s not found in root directory.\n", target);
@@ -23,7 +23,7 @@ int main(int argc, char *argv[]) {
         ushort index = bytes_to_ushort(dir.first_cluster);
 
         byte *fat_table = fat_table_buf(disk);
-        int size = bytes_to_ushort(dir.file_size);
+        uint size = bytes_to_uint(dir.file_size);
         FILE *dest = fopen(filename, "wb");
         copy_file(disk, dest, fat_table, index, size);
         fclose(dest);
