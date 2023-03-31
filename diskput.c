@@ -117,8 +117,6 @@ void add_dir_entry(FILE *disk, dir_list_t dirs, char *filename, uint size,
       return;
     }
   }
-  fseek(disk, 512 * 19, SEEK_SET);
-  fwrite(dirs.dirs, sizeof(directory_t), DIRS_IN_ROOT, disk);
 }
 
 ushort copy_to_root(FILE *disk, FILE *source, fat12_t fat12, char *filename,
@@ -173,7 +171,6 @@ int main(int argc, char *argv[]) {
     // the file is going to be stored in the root directory
     // check the size of the file
     ushort free_index = copy_to_root(disk, source, fat12, filename, size);
-
     add_dir_entry(disk, fat12.root, filename, size, free_index);
   }
 
@@ -181,8 +178,9 @@ int main(int argc, char *argv[]) {
   // write the FAT table to the disk
   printf("Write Complete\nUpdating FAT table\n");
   fwrite(fat12.fat.table, 1, fat12.fat.size, disk);
+  fseek(disk, 512 * 19, SEEK_SET);
+  fwrite(fat12.root.dirs, sizeof(directory_t), DIRS_IN_ROOT, disk);
   printf("Complete\n");
   free_fat12(fat12);
-
   return 0;
 }

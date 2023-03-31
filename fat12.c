@@ -216,6 +216,8 @@ fat_table_t fat_table(FILE *disk) {
   int fat_start = reserved_sectors;
   int fat_size_bytes = fat_size * SECTOR_SIZE;
   byte *fat_table = malloc(fat_size_bytes * sizeof(byte));
+  fseek(disk, SECTOR_SIZE * fat_start, SEEK_SET);
+  fread(fat_table, fat_size_bytes, 1, disk);
   fat_table_t table = {.table = fat_table,
                        .size = fat_size_bytes,
                        .start = fat_start,
