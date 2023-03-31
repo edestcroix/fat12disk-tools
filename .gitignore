@@ -3,6 +3,7 @@ build/
 disklist
 diskget
 diskinfo
+diskput
 *.PDF
 *.JPG
 *.TXT

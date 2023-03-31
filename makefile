@@ -4,7 +4,11 @@ COMPILE = $(COMPILER) $(CFLAGS)
 BUILD_DEPS = build/byte.o build/fat12.o
 
 
-all: diskinfo disklist diskget
+all: diskinfo disklist diskget diskput
+
+
+diskput: diskput.c $(BUILD_DEPS)
+	$(COMPILER) $^ -o $@
 
 diskget: diskget.c $(BUILD_DEPS)
 	$(COMPILER) $^ -o $@
