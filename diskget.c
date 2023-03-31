@@ -5,10 +5,9 @@
 int main(int argc, char *argv[]) {
   FILE *disk = fopen(argv[1], "rb");
   char *target = argv[2];
-  directory_t *dirs = root_dirs(disk);
-
-  for (int i = 0; i < DIRS_IN_ROOT; i++) {
-    directory_t dir = dirs[i];
+  fat12_t fat12 = fat12_from_file(disk);
+  for (int i = 0; i < fat12.root.size; i++) {
+    directory_t dir = fat12.root.dirs[i];
     switch (should_skip_dir(dir)) {
     case 1 ... 2:
       continue;
@@ -21,14 +20,12 @@ int main(int argc, char *argv[]) {
       if (strcmp(filename, target) == 0) {
         printf("Found %s\n", filename);
         ushort index = bytes_to_ushort(dir.first_cluster);
-
-        byte *fat_table = fat_table_buf(disk);
-        uint size = bytes_to_uint(dir.file_size);
         FILE *dest = fopen(filename, "wb");
-        copy_file(disk, dest, fat_table, index, size);
+        copy_file(disk, dest, fat12.fat.table, index,
+                  bytes_to_uint(dir.file_size));
         fclose(dest);
         fclose(disk);
-        free(dirs);
+        free_fat12(fat12);
         printf("File %s copied to current directory.\n", target);
         exit(0);
       }

@@ -66,10 +66,8 @@ void parse_dirs(FILE *disk, byte *fat_table, dir_list_t dirs, char dirname[9]) {
 
 int main(int argc, char *argv[]) {
   FILE *disk = fopen(argv[1], "rb");
-  byte *fat_table = fat_table_buf(disk);
-  directory_t *dirs = root_dirs(disk);
-  dir_list_t dir_list = (dir_list_t){.dirs = dirs, .size = DIRS_IN_ROOT};
-  parse_dirs(disk, fat_table, dir_list, "Root Dir");
-  free(dir_list.dirs);
+  fat12_t fat12 = fat12_from_file(disk);
+  parse_dirs(disk, fat12.fat.table, fat12.root, "Root Dir");
+  free_fat12(fat12);
   fclose(disk);
 }

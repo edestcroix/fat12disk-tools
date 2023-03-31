@@ -3,13 +3,6 @@
  * space, number of files, FAT copies, and sectors per FAT. */
 #include "fat12.h"
 
-void print_os_name(FILE *disk) {
-  // the os name is the first 8 bytes of the boot sector
-  // the boot sector starts at byte 3
-  byte *os_name = read_bytes(disk, 8, 3);
-  printf("OS Name: %s\n", os_name);
-}
-
 void print_disk_label(FILE *disk) {
   // buf is the buffer containing the root directory
   directory_t *dirs = root_dirs(disk);
