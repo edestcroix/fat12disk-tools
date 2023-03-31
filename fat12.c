@@ -12,12 +12,6 @@ int last_sector(int index, char *exit_msg) {
   return index >= LAST_SECTOR;
 }
 
-// reads exactly SECTOR_SIZE bytes from the disk, at the
-// sector_num * SECTOR_SIZE offset from the start of the disk.
-byte *read_sector(FILE *disk, int sector_num) {
-  return read_bytes(disk, SECTOR_SIZE, sector_num * SECTOR_SIZE);
-}
-
 /* Retrieves the 12-bit value stored in the fat table at index n. If n is even,
  * the lower byte of the index is b1, and the remaining 4 bits are the upper 4
  * bits of b2. (the bits from b2 are shifted right 8 bits to be added to b1
@@ -27,32 +21,6 @@ byte *read_sector(FILE *disk, int sector_num) {
 ushort fat_entry(byte *fat_table, int n) {
   ushort b1 = fat_table[3 * n / 2], b2 = fat_table[3 * n / 2 + 1];
   return (n % 2 == 0) ? ((0x00f & b2) << 8) | b1 : b2 << 4 | ((0xf0 & b1) >> 4);
-}
-
-/* Copies the file starting at the sector in the FAT-12
- * filesystem in src_disk corresponding to index into the out file
- * on the host filesystem. */
-void copy_file(FILE *src, FILE *out, byte *fat_table, int index, int size) {
-  // printf("copy_file: index %d, size %d\n", index, size);
-  ushort next_index = fat_entry(fat_table, index);
-  byte *sector = read_sector(src, index + SECTOR_OFFSET);
-
-  if (last_sector(next_index, "copy_file")) {
-    // printf("last_sector: sector %d, size %d\n", (index + SECTOR_OFFSET),
-    // size);
-    fwrite(sector, size, 1, out);
-  } else {
-    fwrite(sector, SECTOR_SIZE, 1, out);
-    copy_file(src, out, fat_table, next_index, size - SECTOR_SIZE);
-  }
-  free(sector);
-}
-
-directory_t read_dir(FILE *disk, int address) {
-  directory_t dir;
-  fseek(disk, address, SEEK_SET);
-  fread(&dir, sizeof(directory_t), 1, disk);
-  return dir;
 }
 
 /* Returns status code to determine whether a directory entry should be skipped.
@@ -74,6 +42,13 @@ int should_skip_dir(directory_t dir) {
   } else {
     return 0;
   }
+}
+
+directory_t read_dir(FILE *disk, int address) {
+  directory_t dir;
+  fseek(disk, address, SEEK_SET);
+  fread(&dir, sizeof(directory_t), 1, disk);
+  return dir;
 }
 
 /* Allows reading "limit" amount of directory entries from the sector specified.
@@ -187,28 +162,7 @@ dir_list_t dir_from_fat(FILE *disk, byte *fat_table, int index) {
   return dir_list;
 }
 
-byte *boot_sector_buf(FILE *disk) {
-  fseek(disk, 0, SEEK_SET);
-  byte *buf = malloc(SECTOR_SIZE * sizeof(byte));
-  fread(buf, SECTOR_SIZE, 1, disk);
-  return buf;
-}
-
-byte *fat_table_buf(FILE *disk) {
-  byte *boot_sector = boot_sector_buf(disk);
-  int fat_size = boot_sector[22] + (boot_sector[23] << 8);
-  int reserved_sectors = boot_sector[14] + (boot_sector[15] << 8);
-  int fat_start = reserved_sectors;
-  int fat_size_bytes = fat_size * SECTOR_SIZE;
-  byte *fat_table = malloc(fat_size_bytes * sizeof(byte));
-  fseek(disk, SECTOR_SIZE * fat_start, SEEK_SET);
-  fread(fat_table, fat_size_bytes, 1, disk);
-  free(boot_sector);
-  return fat_table;
-}
-
-fat_table_t fat_table(FILE *disk) {
-  byte *boot_sector = boot_sector_buf(disk);
+fat_table_t fat_table(FILE *disk, byte *boot_sector) {
   int fat_size = boot_sector[22] + (boot_sector[23] << 8);
   int reserved_sectors = boot_sector[14] + (boot_sector[15] << 8);
   int num_sectors = boot_sector[19] + (boot_sector[20] << 8);
@@ -248,9 +202,12 @@ int free_space(byte *fat_table, int num_sectors) {
 }
 
 fat12_t fat12_from_file(FILE *disk) {
-  byte *boot_sector = boot_sector_buf(disk);
+  fseek(disk, 0, SEEK_SET);
+  byte *boot_sector = malloc(SECTOR_SIZE * sizeof(byte));
+  fread(boot_sector, SECTOR_SIZE, 1, disk);
+
   directory_t *root = root_dirs(disk);
-  fat_table_t fat = fat_table(disk);
+  fat_table_t fat = fat_table(disk, boot_sector);
   dir_list_t root_list = {.dirs = root, .size = 224};
   int num_sectors = boot_sector[19] + (boot_sector[20] << 8);
   ushort bytes_per_sector = bytes_to_ushort(boot_sector + 11);

@@ -57,8 +57,6 @@ typedef struct fat12_t {
   fat_table_t fat;
   dir_list_t root;
   uint num_sectors;
-  uint sector_size;
-  uint num_files;
   uint free_space;
   uint total_size;
 } fat12_t;
@@ -72,13 +70,7 @@ dir_list_t dir_from_fat(FILE *disk, byte *fat_table, int index);
 
 int should_skip_dir(directory_t dir);
 
-// functions for reading directories out of the filesystem
-directory_t *sector_dirs(FILE *disk, int sector);
-directory_t *root_dirs(FILE *disk);
-
-// helper functions for getting boot sector and fat table buffers.
-byte *boot_sector_buf(FILE *disk);
-byte *fat_table_buf(FILE *disk);
+int last_sector(int index, char *exit_msg);
 
 // combines the filename and extension sections
 // of a directory entry into a single string.

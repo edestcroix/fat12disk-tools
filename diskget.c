@@ -1,10 +1,36 @@
 /* Diskget fetches a file out of the root directory of the disk image
  * into the current directory. (Error if file not found in root dir) */
 #include "fat12.h"
+#include <ctype.h>
+
+// reads exactly SECTOR_SIZE bytes from the disk, at the
+// sector_num * SECTOR_SIZE offset from the start of the disk.
+byte *read_sector(FILE *disk, int sector_num) {
+  return read_bytes(disk, SECTOR_SIZE, sector_num * SECTOR_SIZE);
+}
+
+/* Copies the file starting at the sector in the FAT-12
+ * filesystem in src_disk corresponding to index into the out file
+ * on the host filesystem. */
+void copy_file(FILE *src, FILE *out, byte *fat_table, int index, int size) {
+  ushort next_index = fat_entry(fat_table, index);
+  byte *sector = read_sector(src, index + SECTOR_OFFSET);
+
+  if (last_sector(next_index, "copy_file")) {
+    fwrite(sector, size, 1, out);
+  } else {
+    fwrite(sector, SECTOR_SIZE, 1, out);
+    copy_file(src, out, fat_table, next_index, size - SECTOR_SIZE);
+  }
+  free(sector);
+}
 
 int main(int argc, char *argv[]) {
   FILE *disk = fopen(argv[1], "rb");
   char *target = argv[2];
+  for (int i = 0; target[i]; i++) {
+    target[i] = toupper(target[i]);
+  }
   fat12_t fat12 = fat12_from_file(disk);
   for (int i = 0; i < fat12.root.size; i++) {
     directory_t dir = fat12.root.dirs[i];
