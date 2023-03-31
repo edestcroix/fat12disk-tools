@@ -10,9 +10,9 @@ int main(int argc, char *argv[]) {
   for (int i = 0; i < DIRS_IN_ROOT; i++) {
     directory_t dir = dirs[i];
     switch (should_skip_dir(dir)) {
-    case 1:
-      continue;
     case 2:
+      continue;
+    case 3:
       printf("%s not found in root directory.\n", target);
       exit(1);
     default:
