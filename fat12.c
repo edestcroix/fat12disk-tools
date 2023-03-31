@@ -149,9 +149,8 @@ int count_files(FILE *disk, byte *fat_table, dir_list_t dirs) {
           num += count_files(disk, fat_table, next_dirs);
           free(next_dirs.dirs);
         }
-      } else if (!(dir.attribute & DIR_MASK)) {
+      } else {
         num++;
-        continue;
       }
     }
   }

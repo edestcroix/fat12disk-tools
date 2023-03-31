@@ -57,9 +57,11 @@ void parse_dirs(FILE *disk, byte *fat_table, dir_list_t dirs, char dirname[9]) {
         ushort index = bytes_to_ushort(dir.first_cluster);
         dir_list_t next_dirs = dir_from_fat(disk, fat_table, index);
         parse_dirs(disk, fat_table, next_dirs, bytes_to_filename(dir.filename));
+        free(next_dirs.dirs);
       }
     }
   }
+  free(dir_arr);
 }
 
 int main(int argc, char *argv[]) {
