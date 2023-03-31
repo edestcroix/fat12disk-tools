@@ -45,6 +45,23 @@ typedef struct dir_list_t {
   int size;
 } dir_list_t;
 
+typedef struct fat_table_t {
+  byte *table;
+  int start;
+  int size;
+  int valid_sectors;
+} fat_table_t;
+
+typedef struct fat12_t {
+  byte *boot_sector;
+  fat_table_t fat;
+  dir_list_t root;
+  uint num_sectors;
+  uint sector_size;
+  uint num_files;
+  uint free_space;
+} fat12_t;
+
 ushort fat_entry(byte *fat_table, int n);
 
 // functions for various filesystem actions.
@@ -67,3 +84,6 @@ byte *fat_table_buf(FILE *disk);
 char *filename_ext(directory_t dir);
 
 int free_space(byte *fat_table, int num_sectors);
+
+fat12_t fat12_from_file(FILE *disk);
+void free_fat12(fat12_t fat12);

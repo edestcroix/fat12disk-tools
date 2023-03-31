@@ -33,10 +33,13 @@ ushort fat_entry(byte *fat_table, int n) {
  * filesystem in src_disk corresponding to index into the out file
  * on the host filesystem. */
 void copy_file(FILE *src, FILE *out, byte *fat_table, int index, int size) {
+  // printf("copy_file: index %d, size %d\n", index, size);
   ushort next_index = fat_entry(fat_table, index);
   byte *sector = read_sector(src, index + SECTOR_OFFSET);
 
   if (last_sector(next_index, "copy_file")) {
+    // printf("last_sector: sector %d, size %d\n", (index + SECTOR_OFFSET),
+    // size);
     fwrite(sector, size, 1, out);
   } else {
     fwrite(sector, SECTOR_SIZE, 1, out);
@@ -205,6 +208,21 @@ byte *fat_table_buf(FILE *disk) {
   return fat_table;
 }
 
+fat_table_t fat_table(FILE *disk) {
+  byte *boot_sector = boot_sector_buf(disk);
+  int fat_size = boot_sector[22] + (boot_sector[23] << 8);
+  int reserved_sectors = boot_sector[14] + (boot_sector[15] << 8);
+  int num_sectors = boot_sector[19] + (boot_sector[20] << 8);
+  int fat_start = reserved_sectors;
+  int fat_size_bytes = fat_size * SECTOR_SIZE;
+  byte *fat_table = malloc(fat_size_bytes * sizeof(byte));
+  fat_table_t table = {.table = fat_table,
+                       .size = fat_size_bytes,
+                       .start = fat_start,
+                       .valid_sectors = num_sectors - 32};
+  return table;
+}
+
 char *filename_ext(directory_t dir) {
   char *filename = malloc(13 * sizeof(char));
   memset(filename, 0, 12);
@@ -226,4 +244,28 @@ int free_space(byte *fat_table, int num_sectors) {
     free_sectors += (fat_entry(fat_table, i) == 0x000);
   }
   return (free_sectors - 32) * SECTOR_SIZE;
+}
+
+fat12_t fat12_from_file(FILE *disk) {
+  byte *boot_sector = boot_sector_buf(disk);
+  directory_t *root = root_dirs(disk);
+  fat_table_t fat = fat_table(disk);
+  dir_list_t root_list = {.dirs = root, .size = 224};
+  int num_sectors = boot_sector[19] + (boot_sector[20] << 8);
+  int free_space_bytes = free_space(fat.table, num_sectors);
+  fat12_t fat12;
+  int fat_size = boot_sector[22] + (boot_sector[23] << 8);
+  fat_size *= SECTOR_SIZE;
+  fat12.boot_sector = boot_sector;
+  fat12.fat = fat;
+  fat12.root = root_list;
+  fat12.num_sectors = num_sectors;
+  fat12.free_space = free_space_bytes;
+  return fat12;
+}
+
+void free_fat12(fat12_t fat12) {
+  free(fat12.boot_sector);
+  free(fat12.fat.table);
+  free(fat12.root.dirs);
 }

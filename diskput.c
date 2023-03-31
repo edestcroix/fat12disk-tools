@@ -6,10 +6,10 @@
  * - Fix timestamps not being set correctly
  *   */
 
-ushort next_free_index(byte *fat_table, int index) {
+ushort next_free_index(fat_table_t fat, int index) {
   // starting at index, search the fat table for the next free sector,
-  for (int i = index + 1; i < 2848; i++) {
-    ushort entry = fat_entry(fat_table, i);
+  for (int i = index + 1; i < fat.valid_sectors; i++) {
+    ushort entry = fat_entry(fat.table, i);
     if (entry == 0) {
       return i;
     }
@@ -46,9 +46,9 @@ void update_fat_table(byte *fat_table, ushort value, int index) {
   }
 }
 
-void write_file(FILE *src_file, FILE *dest_disk, byte *fat_table, int index,
+void write_file(FILE *src_file, FILE *dest_disk, fat12_t fat12, int index,
                 int size) {
-  ushort next_index = next_free_index(fat_table, index);
+  ushort next_index = next_free_index(fat12.fat, index);
   int sector = index + SECTOR_OFFSET;
   int sector_addr = sector * 512;
   if (size < 512) {
@@ -57,7 +57,7 @@ void write_file(FILE *src_file, FILE *dest_disk, byte *fat_table, int index,
     fread(buf, 1, size, src_file);
     fseek(dest_disk, sector_addr, SEEK_SET);
     fwrite(buf, 1, size, dest_disk);
-    update_fat_table(fat_table, 0xFFF, index);
+    update_fat_table(fat12.fat.table, 0xFFF, index);
   } else {
     char *buf = malloc(sizeof(char) * 512);
     fread(buf, 1, 512, src_file);
@@ -67,12 +67,14 @@ void write_file(FILE *src_file, FILE *dest_disk, byte *fat_table, int index,
     // since write_file is called again after writing,
     // the file pointer for src_file should be moved
     // to the correct place.
-    write_file(src_file, dest_disk, fat_table, next_index, size - 512);
-    update_fat_table(fat_table, next_index, index);
+    write_file(src_file, dest_disk, fat12, next_index, size - 512);
+    update_fat_table(fat12.fat.table, next_index, index);
   }
 }
 
-void add_dir_entry(dir_list_t dirs, char *filename, uint size, int cluster) {
+// TODO: This is also trash. And the times are completely wrong.
+void add_dir_entry(FILE *disk, dir_list_t dirs, char *filename, uint size,
+                   int cluster) {
   directory_t dir;
   directory_t *dir_buf = dirs.dirs;
   int i = 0;
@@ -115,78 +117,72 @@ void add_dir_entry(dir_list_t dirs, char *filename, uint size, int cluster) {
       return;
     }
   }
+  fseek(disk, 512 * 19, SEEK_SET);
+  fwrite(dirs.dirs, sizeof(directory_t), DIRS_IN_ROOT, disk);
 }
 
-// TODO: This code looks like garbage.
+ushort copy_to_root(FILE *disk, FILE *source, fat12_t fat12, char *filename,
+                    int size) {
+  // check if the filename already exists
+  for (int i = 0; i < DIRS_IN_ROOT; i++) {
+    if (strcmp(filename_ext(fat12.root.dirs[i]), filename) == 0) {
+      printf("Error: file already exists.\n");
+      exit(1);
+    }
+  }
+  ushort free_index = next_free_index(fat12.fat, 2);
+  printf("writing to disk\n");
+  write_file(source, disk, fat12, free_index, size);
+  return free_index;
+}
+
+int file_size(FILE *file) {
+  fseek(file, 0L, SEEK_END);
+  int size = ftell(file);
+  fseek(file, 0L, SEEK_SET);
+  return size;
+}
+
 int main(int argc, char *argv[]) {
   FILE *disk = fopen(argv[1], "rb+");
   if (disk == NULL) {
     printf("Error opening disk image.\n");
   }
+  printf("Copying to root_dir\n");
+  char *filename = argv[2];
+  FILE *source = fopen(filename, "rb");
+  if (source == NULL) {
+    printf("Error: %s does not exist on host system.\n", filename);
+    exit(1);
+  }
+  fat12_t fat12 = fat12_from_file(disk);
+
+  int size = file_size(source);
+  if (size > fat12.free_space) {
+    printf("Error: not enough space on disk to store file.\n");
+    exit(1);
+  }
   // argv[2] is either a file or a directory path,
   // if it's a directory path, the filename is argv[3]/
   if (argc == 4) {
-    char *dir_path = argv[2];
-    // split the path into a list of directories
-    char *dirs = malloc(sizeof(char) * 9 * 16);
-    char *split = strtok(dir_path, "/");
-    for (int i = 0; split != NULL; i++) {
-      split = strtok(NULL, "/");
-      dirs[i] = *split;
-    }
-    printf("not working yet\n");
+    // TODO: copy to directory
+    printf("Copying to directory\n");
+    printf("Not implemented yet\n");
     exit(1);
-    char *filename = argv[3];
   } else {
-    printf("Copying to root_dir\n");
-    char *filename = argv[2];
-    FILE *source = fopen(filename, "rb");
-    if (source == NULL) {
-      printf("Error: %s does not exist on host system.\n", filename);
-      exit(1);
-    }
-    directory_t *dirs = root_dirs(disk);
-    // check if the filename already exists
-    for (int i = 0; i < DIRS_IN_ROOT; i++) {
-      if (strcmp(filename_ext(dirs[i]), filename) == 0) {
-        printf("Error: file already exists.\n");
-        exit(1);
-      }
-    }
     // the file is going to be stored in the root directory
-    byte *boot_buf = boot_sector_buf(disk);
-    int num_sectors = bytes_to_ushort(boot_buf + 19);
-    byte *fat_table = fat_table_buf(disk);
-    int dest_space = free_space(fat_table, num_sectors);
     // check the size of the file
-    int source_size = 0;
-    fseek(source, 0L, SEEK_END);
-    source_size = ftell(source);
-    fseek(source, 0L, SEEK_SET);
-    if (source_size > dest_space) {
-      printf("Error: not enough space on disk to store file.\n");
-      exit(1);
-    }
-    ushort free_index = next_free_index(fat_table, 2);
-    printf("writing to disk\n");
-    write_file(source, disk, fat_table, free_index, source_size);
-    dir_list_t dir_list = {.dirs = dirs, .size = DIRS_IN_ROOT};
-    add_dir_entry(dir_list, filename, source_size, free_index);
-    // write the updated directory entries to the disk
-    fseek(disk, 512 * 19, SEEK_SET);
-    fwrite(dirs, sizeof(directory_t), DIRS_IN_ROOT, disk);
-    // write the FAT table to the disk
-    byte *boot_sector = boot_sector_buf(disk);
-    int fat_size = boot_sector[22] + (boot_sector[23] << 8);
-    int reserved_sectors = boot_sector[14] + (boot_sector[15] << 8);
-    int fat_start = reserved_sectors;
-    int fat_size_bytes = fat_size * SECTOR_SIZE;
-    printf("Write Complete\nUpdating FAT table\n");
-    printf("fat_size: %d\n", fat_size_bytes);
-    fseek(disk, fat_start * SECTOR_SIZE, SEEK_SET);
-    fwrite(fat_table, 1, fat_size_bytes, disk);
-    printf("Complete\n");
+    ushort free_index = copy_to_root(disk, source, fat12, filename, size);
+
+    add_dir_entry(disk, fat12.root, filename, size, free_index);
   }
+
+  // write the updated directory entries to the disk
+  // write the FAT table to the disk
+  printf("Write Complete\nUpdating FAT table\n");
+  fwrite(fat12.fat.table, 1, fat12.fat.size, disk);
+  printf("Complete\n");
+  free_fat12(fat12);
 
   return 0;
 }
