@@ -3,12 +3,6 @@
 #include "fat12.h"
 #include <ctype.h>
 
-// reads exactly SECTOR_SIZE bytes from the disk, at the
-// sector_num * SECTOR_SIZE offset from the start of the disk.
-byte *read_sector(FILE *disk, int sector_num) {
-  return read_bytes(disk, SECTOR_SIZE, sector_num * SECTOR_SIZE);
-}
-
 /* Copies the file starting at the sector in the FAT-12
  * filesystem in src_disk corresponding to index into the out file
  * on the host filesystem. */

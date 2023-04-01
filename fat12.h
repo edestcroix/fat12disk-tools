@@ -63,6 +63,8 @@ typedef struct fat12_t {
 
 ushort fat_entry(byte *fat_table, int n);
 
+byte *read_sector(FILE *disk, int sector_num);
+
 // functions for various filesystem actions.
 void copy_file(FILE *src_disk, FILE *out, byte *fat_table, int index, int size);
 int count_files(FILE *disk, byte *fat_table, dir_list_t dirs);

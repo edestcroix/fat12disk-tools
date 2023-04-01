@@ -1,6 +1,12 @@
 /* File containing utilites for interacting with fat12 disk images. */
 #include "fat12.h"
 
+// reads exactly SECTOR_SIZE bytes from the disk, at the
+// sector_num * SECTOR_SIZE offset from the start of the disk.
+byte *read_sector(FILE *disk, int sector_num) {
+  return read_bytes(disk, SECTOR_SIZE, sector_num * SECTOR_SIZE);
+}
+
 /* checks if the index from the FAT table is the value(s) that indicate the end
  * of a file. Additionally, throws error if index is <= 1, as this should never
  * be encountered normally. */
