@@ -1,6 +1,8 @@
 #include "fat12.h"
 #include <assert.h>
 #include <ctype.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 
 // TODO:- Find places where pointers aren't being freed (If any).
 //      - Add some parsing to the input arguments to make sure
@@ -9,6 +11,7 @@ typedef struct dir_info {
   char filename[50];
   int size;
   ushort first_cluster;
+  struct tm *timestamp;
 } dir_info_t;
 
 void write_to_disk(FILE *disk, void *buffer, int address, int block_size,
@@ -73,7 +76,7 @@ void write_file(FILE *src_file, FILE *dest_disk, fat12_t fat12, int index,
 directory_t create_dir(dir_info_t dir_info) {
   char *filename = dir_info.filename;
   ushort start_index = dir_info.first_cluster;
-  int size = dir_info.size;
+  ushort size = dir_info.size;
   directory_t dir;
   int i = 0;
   while (i < 13) {
@@ -88,18 +91,20 @@ directory_t create_dir(dir_info_t dir_info) {
   memcpy(dir.extension, filename + i + 1, 3);
   dir.attribute = 0x20;
 
-  time_t t = time(NULL);
-  struct tm time = *localtime(&t);
+  for (int i = 0; i < 4; i++) {
+    dir.file_size[i] = (byte)(size >> (i * 8));
+  }
 
+  for (int i = 0; i < 2; i++) {
+    dir.first_cluster[i] = (byte)(start_index >> (i * 8));
+  }
+
+  struct tm *time = dir_info.timestamp;
   ushort time_stamp =
-      (time.tm_hour << 11) | (time.tm_min << 5) | (time.tm_sec / 2);
+      (time->tm_hour << 11) | (time->tm_min << 5) | (time->tm_sec / 2);
   memcpy(&dir.creation_time, &time_stamp, 2);
   ushort date_stamp =
-      ((time.tm_year - 80) << 9) | (time.tm_mon << 5) | time.tm_mday;
-  // TODO: Last modified times should be set to the times
-  // of the file being copied, not the current time.
-  // (Have to add a new parameter to dir_info_t, and
-  // read the file's times when opening it for reading.)
+      ((time->tm_year - 80) << 9) | (time->tm_mon << 5) | time->tm_mday;
   memcpy(&dir.creation_date, &date_stamp, 2);
   memcpy(&dir.last_access_date, &date_stamp, 2);
   memcpy(&dir.last_modified_time, &time_stamp, 2);
@@ -278,13 +283,6 @@ void add_to_tree(FILE *disk, FILE *source, fat12_t fat12, dir_info_t dir_info,
   }
 }
 
-int file_size(FILE *file) {
-  fseek(file, 0L, SEEK_END);
-  int size = ftell(file);
-  fseek(file, 0L, SEEK_SET);
-  return size;
-}
-
 int main(int argc, char *argv[]) {
   FILE *disk = fopen(argv[1], "rb+");
   char *filename = (argc == 3) ? argv[2] : argv[3];
@@ -305,7 +303,10 @@ int main(int argc, char *argv[]) {
   }
   fat12_t fat12 = fat12_from_file(disk);
 
-  int size = file_size(source);
+  struct stat attr;
+  stat(filename, &attr);
+  struct tm *time = localtime(&attr.st_mtime);
+  int size = attr.st_size;
   if (size > fat12.free_space) {
     printf("Error: not enough space on disk to store file.\n");
     exit(1);
@@ -318,7 +319,8 @@ int main(int argc, char *argv[]) {
   // a consistent state, and the copied file can just be overwritten.
   write_file(source, disk, fat12, free_index, size);
 
-  dir_info_t dir_info = {.size = size, .first_cluster = free_index};
+  dir_info_t dir_info = {
+      .size = size, .first_cluster = free_index, .timestamp = time};
   strncpy(dir_info.filename, filename, 13);
 
   if (dir == 0x00) {
