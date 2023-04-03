@@ -92,21 +92,19 @@ directory_t create_dir(dir_info_t dir_info) {
   time_t t = time(NULL);
   struct tm time = *localtime(&t);
 
-  // FIXME: Timestaps are still not being set correctly.
-  ushort date =
-      (time.tm_mday) | ((time.tm_mon + 1) << 5) | ((time.tm_year - 80) << 9);
-  ushort time_val =
-      (time.tm_sec / 2) | (time.tm_min << 5) | (time.tm_hour << 11);
-
-  dir.last_modified_time[0] = time_val & 0xff;
-  dir.last_modified_time[1] = (time_val >> 8) & 0xff;
-  dir.last_modified_date[0] = date & 0xff;
-  dir.last_modified_date[1] = (date >> 8) & 0xff;
-  dir.first_cluster[0] = start_index & 0xff;
-  dir.first_cluster[1] = (start_index >> 8) & 0xff;
-  for (int i = 0; i < 4; i++) {
-    dir.file_size[i] = (size >> (i * 8)) & 0xff;
-  }
+  ushort time_stamp =
+      (time.tm_hour << 11) | (time.tm_min << 5) | (time.tm_sec / 2);
+  memcpy(&dir.creation_time, &time_stamp, 2);
+  ushort date_stamp =
+      ((time.tm_year - 80) << 9) | (time.tm_mon << 5) | time.tm_mday;
+  // TODO: Last modified times should be set to the times
+  // of the file being copied, not the current time.
+  // (Have to add a new parameter to dir_info_t, and
+  // read the file's times when opening it for reading.)
+  memcpy(&dir.creation_date, &date_stamp, 2);
+  memcpy(&dir.last_access_date, &date_stamp, 2);
+  memcpy(&dir.last_modified_time, &time_stamp, 2);
+  memcpy(&dir.last_modified_date, &date_stamp, 2);
   return dir;
 }
 

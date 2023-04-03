@@ -38,7 +38,6 @@ int main(int argc, char *argv[]) {
       NULL; // My linter complains if I don't have a statement here
       char *filename = filename_ext(dir);
       if (strcmp(filename, target) == 0) {
-        printf("Found %s\n", filename);
         ushort index = bytes_to_ushort(dir.first_cluster);
         FILE *dest = fopen(filename, "wb");
         copy_file(disk, dest, fat12.fat.table, index,
@@ -51,4 +50,8 @@ int main(int argc, char *argv[]) {
       }
     }
   }
+  printf("%s not found in root directory.\n", target);
+  fclose(disk);
+  free_fat12(fat12);
+  exit(1);
 }
