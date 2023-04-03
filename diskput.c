@@ -76,7 +76,6 @@ directory_t create_dir(dir_info_t dir_info) {
   int size = dir_info.size;
   directory_t dir;
   int i = 0;
-  printf("Filename: %s\n", filename);
   while (i < 13) {
     if (filename[i] == '.') {
       break;
@@ -187,7 +186,7 @@ void add_to_sector(FILE *disk, fat12_t fat12, int index, dir_info_t dir_info,
       switch (should_skip_dir(*dir)) {
       case 2 ... 3:
         add_dir_to_sector(sector, dir_info);
-        write_to_disk(disk, sector, sector_num, SECTOR_SIZE, 1);
+        write_to_disk(disk, sector, sector_num * 512, SECTOR_SIZE, 1);
         free(sector);
         return;
       default:
@@ -270,7 +269,7 @@ void add_to_tree(FILE *disk, FILE *source, fat12_t fat12, dir_info_t dir_info,
         exit(1);
       }
       if (strcmp(dirname, target) == 0) {
-        printf("Found %s\n", dirname);
+        printf("Found directory %s\n", dirname);
         ushort index = bytes_to_ushort(dir.first_cluster);
         add_to_sector(disk, fat12, index, dir_info, dirpath);
         return;
