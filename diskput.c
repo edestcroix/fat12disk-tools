@@ -11,6 +11,16 @@ typedef struct dir_info {
   ushort first_cluster;
 } dir_info_t;
 
+void write_to_disk(FILE *disk, void *buffer, int address, int block_size,
+                   int write_size) {
+
+  fseek(disk, address, SEEK_SET);
+  if (fwrite(buffer, block_size, write_size, disk) < write_size) {
+    printf("Error: failed to write to disk.\n");
+    exit(1);
+  }
+}
+
 // starting at index+1, search the fat table for the next free sector,
 // use index i + 1 because the current index might not be updated yet.
 ushort next_free_index(fat_table_t fat, int index) {
@@ -45,17 +55,15 @@ void update_fat_table(byte *fat_table, ushort value, int index) {
 void write_file(FILE *src_file, FILE *dest_disk, fat12_t fat12, int index,
                 int size) {
   int sector = (index + SECTOR_OFFSET) * SECTOR_SIZE;
-  if (size < 512) {
-    char buf[size];
+  if (size < SECTOR_SIZE) {
+    byte buf[size];
     fread(buf, 1, size, src_file);
-    fseek(dest_disk, sector, SEEK_SET);
-    fwrite(buf, 1, size, dest_disk);
+    write_to_disk(dest_disk, buf, sector, 1, size);
     update_fat_table(fat12.fat.table, 0xFFF, index);
   } else {
-    char buf[SECTOR_SIZE];
+    byte buf[SECTOR_SIZE];
     fread(buf, 1, SECTOR_SIZE, src_file);
-    fseek(dest_disk, sector, SEEK_SET);
-    fwrite(buf, 1, SECTOR_SIZE, dest_disk);
+    write_to_disk(dest_disk, buf, sector, 1, SECTOR_SIZE);
     ushort next_index = next_free_index(fat12.fat, index);
     write_file(src_file, dest_disk, fat12, next_index, size - SECTOR_SIZE);
     update_fat_table(fat12.fat.table, next_index, index);
@@ -140,7 +148,7 @@ void find_next_dir(FILE *disk, fat12_t fat12, int index, dir_info_t dir_info,
 
   int sector_num = index + SECTOR_OFFSET;
   byte *sector = read_sector(disk, sector_num);
-  for (int i = 0; i < 512; i += 32) {
+  for (int i = 0; i < SECTOR_SIZE; i += sizeof(directory_t)) {
     directory_t *dir = (directory_t *)(sector + i);
     switch (should_skip_dir(*dir)) {
     case 3:
@@ -176,15 +184,12 @@ void add_to_sector(FILE *disk, fat12_t fat12, int index, dir_info_t dir_info,
   byte *sector = read_sector(disk, sector_num);
 
   if (strncmp(target, dir_info.filename, 12) == 0) {
-    for (int i = 0; i < 512; i += 32) {
+    for (int i = 0; i < SECTOR_SIZE; i += 32) {
       directory_t *dir = (directory_t *)(sector + i);
       switch (should_skip_dir(*dir)) {
       case 2 ... 3:
-        // check if we are at the end of the dirpath
         add_dir_to_sector(sector, dir_info);
-        // write the sector to the disk
-        fseek(disk, sector_num * 512, SEEK_SET);
-        fwrite(sector, 512, 1, disk);
+        write_to_disk(disk, sector, sector_num, SECTOR_SIZE, 1);
         free(sector);
         return;
       default:
@@ -208,11 +213,10 @@ void add_to_sector(FILE *disk, fat12_t fat12, int index, dir_info_t dir_info,
     // Create a new sector and add the directory to it, then write this sector
     // into the disk at the first available index.
     ushort free_index = next_free_index(fat12.fat, 1);
-    byte new_sector[512];
-    memset(new_sector, 0, 512);
+    byte new_sector[SECTOR_SIZE];
+    memset(new_sector, 0, SECTOR_SIZE);
     add_dir_to_sector(new_sector, dir_info);
-    fseek(disk, sector_num * 512, SEEK_SET);
-    fwrite(sector, 512, 1, disk);
+    write_to_disk(disk, new_sector, sector_num * SECTOR_SIZE, SECTOR_SIZE, 1);
     update_fat_table(fat12.fat.table, free_index, index);
   } else if (index != 0) {
     // move to the next sector of this directory.
@@ -246,8 +250,8 @@ void add_to_tree(FILE *disk, FILE *source, fat12_t fat12, dir_info_t dir_info,
         directory_t new_dir = create_dir(dir_info);
         // write the directory to the root directory
         memcpy(fat12.root.dirs + i, &new_dir, sizeof(directory_t));
-        fseek(disk, 19 * 512, SEEK_SET);
-        fwrite(fat12.root.dirs, sizeof(directory_t), DIRS_IN_ROOT, disk);
+        write_to_disk(disk, fat12.root.dirs, 19 * 512, sizeof(directory_t),
+                      DIRS_IN_ROOT);
         printf("Added %s to root directory.\n", filename);
         free(target);
         return;
@@ -263,7 +267,6 @@ void add_to_tree(FILE *disk, FILE *source, fat12_t fat12, dir_info_t dir_info,
       }
       NULL;
       char *dirname = filename_ext(dir);
-      printf("Checking Dir %s\n", dirname);
       if (strcmp(filename, dirname) == 0) {
         printf("Error: file already exists.\n");
         exit(1);
@@ -335,8 +338,7 @@ int main(int argc, char *argv[]) {
   }
 
   printf("Write Complete\nUpdating FAT Table\n");
-  fseek(disk, 512 * 1, SEEK_SET);
-  fwrite(fat12.fat.table, fat12.fat.size, 1, disk);
+  write_to_disk(disk, fat12.fat.table, 512 * 1, fat12.fat.size, 1);
   free_fat12(fat12);
   return 0;
 }

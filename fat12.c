@@ -1,6 +1,15 @@
 /* File containing utilites for interacting with fat12 disk images. */
 #include "fat12.h"
 
+void read_from_disk(FILE *disk, void *buf, int address, int block_size,
+                    int read_amt) {
+  fseek(disk, address, SEEK_SET);
+  if (fread(buf, block_size, read_amt, disk) < read_amt) {
+    printf("Error reading from disk.\n");
+    exit(1);
+  }
+}
+
 // reads exactly SECTOR_SIZE bytes from the disk, at the
 // sector_num * SECTOR_SIZE offset from the start of the disk.
 byte *read_sector(FILE *disk, int sector_num) {
@@ -29,10 +38,17 @@ ushort fat_entry(byte *fat_table, int n) {
   return (n % 2 == 0) ? ((0x00f & b2) << 8) | b1 : b2 << 4 | ((0xf0 & b1) >> 4);
 }
 
+int is_cur_or_parent(directory_t dir) {
+  // check for either . or .. filenames
+  int dots = (dir.filename[0] == DOT) + (dir.filename[1] == DOT);
+  // check if there is a space after the dots.
+  return dots <= 2 && dir.filename[dots] == 0x20;
+}
+
 /* Returns status code to determine whether a directory entry should be skipped.
  * 0: do not skip
  * 1: volume_label (sometimes this shouldn't be skipped)
- * 2: free entry, skip
+ * 2: free entry, or current dir/parent dir, skip
  * 3: free entry, skip and end search. */
 int should_skip_dir(directory_t dir) {
   if (dir.filename[0] == 0x00) {
@@ -43,7 +59,7 @@ int should_skip_dir(directory_t dir) {
     return 1;
   } else if (bytes_to_ushort(dir.first_cluster) <= 1) {
     return 2;
-  } else if (dir.filename[0] == DOT) {
+  } else if (is_cur_or_parent(dir)) {
     return 2;
   } else {
     return 0;
@@ -52,8 +68,7 @@ int should_skip_dir(directory_t dir) {
 
 directory_t read_dir(FILE *disk, int address) {
   directory_t dir;
-  fseek(disk, address, SEEK_SET);
-  fread(&dir, sizeof(directory_t), 1, disk);
+  read_from_disk(disk, &dir, address, sizeof(directory_t), 1);
   return dir;
 }
 
@@ -175,8 +190,7 @@ fat_table_t fat_table(FILE *disk, byte *boot_sector) {
   int fat_start = reserved_sectors;
   int fat_size_bytes = fat_size * SECTOR_SIZE;
   byte *fat_table = malloc(fat_size_bytes * sizeof(byte));
-  fseek(disk, SECTOR_SIZE * fat_start, SEEK_SET);
-  fread(fat_table, fat_size_bytes, 1, disk);
+  read_from_disk(disk, fat_table, fat_start * SECTOR_SIZE, fat_size_bytes, 1);
   fat_table_t table = {.table = fat_table,
                        .size = fat_size_bytes,
                        .start = fat_start,
@@ -208,9 +222,8 @@ int free_space(byte *fat_table, int num_sectors) {
 }
 
 fat12_t fat12_from_file(FILE *disk) {
-  fseek(disk, 0, SEEK_SET);
   byte *boot_sector = malloc(SECTOR_SIZE * sizeof(byte));
-  fread(boot_sector, SECTOR_SIZE, 1, disk);
+  read_from_disk(disk, boot_sector, 0, SECTOR_SIZE, 1);
 
   directory_t *root = root_dirs(disk);
   fat_table_t fat = fat_table(disk, boot_sector);

@@ -56,6 +56,9 @@ struct tm bytes_to_time(byte *time_bytes, byte *date_bytes) {
 byte *read_bytes(FILE *disk, int n, int address) {
   byte *buf = (byte *)malloc(n * sizeof(byte));
   fseek(disk, address, SEEK_SET);
-  fread(buf, n, 1, disk);
+  if (fread(buf, n, 1, disk) < 1) {
+    printf("Error reading bytes from disk.\n");
+    exit(1);
+  };
   return buf;
 }

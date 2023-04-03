@@ -49,6 +49,7 @@ void print_dirs(directory_t *dirs, char *dirname, int size) {
 void parse_dirs(FILE *disk, byte *fat_table, dir_list_t dirs, char *dirname) {
   directory_t *dir_arr = dirs.dirs;
   print_dirs(dir_arr, dirname, dirs.size);
+  int n = (strncmp(dirname, "Root", 4)) ? 0 : 1;
   for (int i = 0; i < dirs.size; i++) {
     directory_t dir = dir_arr[i];
     switch (should_skip_dir(dir)) {
@@ -57,7 +58,7 @@ void parse_dirs(FILE *disk, byte *fat_table, dir_list_t dirs, char *dirname) {
     case 3:
       return;
     default:
-      if ((dir.attribute & DIR_MASK)) {
+      if (dir.attribute & DIR_MASK) {
         ushort index = bytes_to_ushort(dir.first_cluster);
         dir_list_t next_dirs = dir_from_fat(disk, fat_table, index);
         // append the next dir to the current dir
