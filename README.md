@@ -1,6 +1,6 @@
 ## Building
 Calling `make` in the source directory creates the executables
-`diskinfo`, `disklist`, `diskget`, and 'diskput`. 
+`diskinfo`, `disklist`, `diskget`, and `diskput`. 
 `make clean` removes the build directory and all executables
 
 ## diskinfo
