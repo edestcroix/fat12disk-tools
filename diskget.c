@@ -20,7 +20,7 @@ void copy_file(FILE *src, FILE *out, byte *fat_table, int index, int size) {
 }
 
 int main(int argc, char *argv[]) {
-  FILE *disk = fopen(argv[1], "rb");
+  FILE *disk = open_disk(argv[1], "rb");
   char *target = argv[2];
   for (int i = 0; target[i]; i++) {
     target[i] = toupper(target[i]);

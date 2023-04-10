@@ -74,7 +74,7 @@ void parse_dirs(FILE *disk, byte *fat_table, dir_list_t dirs, char *dirname) {
 }
 
 int main(int argc, char *argv[]) {
-  FILE *disk = fopen(argv[1], "rb");
+  FILE *disk = open_disk(argv[1], "rb");
   fat12_t fat12 = fat12_from_file(disk);
   char dirname[100] = "Root";
   parse_dirs(disk, fat12.fat.table, fat12.root, dirname);

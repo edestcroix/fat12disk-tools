@@ -1,6 +1,15 @@
 /* File containing utilites for interacting with fat12 disk images. */
 #include "fat12.h"
 
+FILE *open_disk(char *filename, char *attr) {
+  FILE *disk = fopen(filename, attr);
+  if (disk == NULL) {
+    printf("ERROR: Disk image %s does not exist\n", filename);
+    exit(1);
+  }
+  return disk;
+}
+
 void read_from_disk(FILE *disk, void *buf, int address, int block_size,
                     int read_amt) {
   fseek(disk, address, SEEK_SET);
@@ -55,7 +64,7 @@ int should_skip_dir(directory_t dir) {
     return 3;
   } else if (dir.filename[0] == FILE_FREE) {
     return 2;
-  } else if (dir.attribute & LABEL_MASK) {
+  } else if (dir.attribute == LABEL_MASK) {
     return 1;
   } else if (bytes_to_ushort(dir.first_cluster) <= 1) {
     return 2;
@@ -78,7 +87,7 @@ directory_t read_dir(FILE *disk, int address) {
  * on the number of directory entries that can be read. */
 directory_t *read_dirs(FILE *disk, int sector, int limit) {
   directory_t *dir_list = malloc(limit * sizeof(directory_t));
-  int add_at = 0, last_dir_lf = 0;
+  int add_at = 0;
   for (int i = 0; i < limit; i++) {
     directory_t dir = read_dir(disk, sector * SECTOR_SIZE + i * DIR_SIZE);
     switch (should_skip_dir(dir)) {
@@ -92,26 +101,6 @@ directory_t *read_dirs(FILE *disk, int sector, int limit) {
       memset(dir_list + add_at, 0x00, (limit - i) * sizeof(directory_t));
       return dir_list;
     default:
-      // if the attribute is 0x0F, it's a long filename,
-      // so skip it, and set the last_dir_lf flag
-      if (dir.attribute == LONG_NAME) {
-        last_dir_lf = 1;
-        continue;
-      }
-      if (dir.attribute & DIR_MASK) {
-        // if the attribute is 0x10, it's a directory,
-        // and if the last_dir_lf flag is set,
-        // then it's part of a long filename, so
-        // just skip it.
-        // NOTE: Unclear if only the long
-        // filename directory entries should be
-        // skipped, or if the entire directory should
-        // be. Right now, I'm doing the latter.
-        if (last_dir_lf) {
-          last_dir_lf = 0;
-          continue;
-        }
-      }
       dir_list[add_at++] = dir;
     }
   }
@@ -161,23 +150,29 @@ int count_files(FILE *disk, byte *fat_table, dir_list_t dirs) {
  * list, then recurses into the next sector. */
 dir_list_t dir_from_fat(FILE *disk, byte *fat_table, int index) {
   ushort next_index = fat_entry(fat_table, index);
-  int sector_num = 33 + index - 2;
+  int sector_num = index + SECTOR_OFFSET;
 
   directory_t *dirs = sector_dirs(disk, sector_num);
   if (last_sector(next_index, "dir_from_fat")) {
-    dir_list_t dir_list = {.dirs = dirs, .size = 16};
+    // a directory can hold 16 subdirectories,
+    // but 2 will always be . and .., so only
+    // 14 are available.
+    dir_list_t dir_list = {.dirs = dirs, .size = 14};
     return dir_list;
   }
 
   dir_list_t next_dir_list = dir_from_fat(disk, fat_table, next_index);
 
-  dir_list_t dir_list = {
-      .dirs = malloc((16 + next_dir_list.size) * sizeof(directory_t)),
-      .size = 16 + next_dir_list.size};
+  // combine the two lists. Only 14 directries will be added
+  // to the list, because the other two are . and ..
+  dir_list_t dir_list = {.size = 14 + next_dir_list.size};
 
-  memcpy(dir_list.dirs, dirs, 16 * sizeof(directory_t));
-  memcpy(dir_list.dirs + 16, next_dir_list.dirs,
+  dir_list.dirs = malloc(dir_list.size * sizeof(directory_t));
+
+  memcpy(dir_list.dirs, dirs, 14 * sizeof(directory_t));
+  memcpy(dir_list.dirs + 14, next_dir_list.dirs,
          next_dir_list.size * sizeof(directory_t));
+
   free(dirs);
   free(next_dir_list.dirs);
   return dir_list;

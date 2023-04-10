@@ -10,10 +10,9 @@ void print_disk_label(dir_list_t root) {
     int skip = should_skip_dir(dir);
     if (skip == 3) {
       break;
-    } else if (skip != 1) {
-      continue;
+    } else if (skip == 1) {
+      printf("Disk Label: %8.8s\n", dir.filename);
     }
-    printf("Disk Label: %8.8s\n", dir.filename);
   }
 }
 
@@ -24,7 +23,7 @@ byte *buf_slice(byte *buf, int start, int end) {
 }
 
 int main(int argc, char *argv[]) {
-  FILE *disk = fopen(argv[1], "rb");
+  FILE *disk = open_disk(argv[1], "rb");
   fat12_t fat12 = fat12_from_file(disk);
 
   printf("OS Name: %8.8s\n", fat12.boot_sector + 3);

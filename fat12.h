@@ -61,6 +61,8 @@ typedef struct fat12_t {
   uint total_size;
 } fat12_t;
 
+FILE *open_disk(char *filename, char *attr);
+
 ushort fat_entry(byte *fat_table, int n);
 
 byte *read_sector(FILE *disk, int sector_num);

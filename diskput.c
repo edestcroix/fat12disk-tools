@@ -186,11 +186,11 @@ void add_to_sector(FILE *disk, fat12_t fat12, int index, dir_info_t dir_info,
   byte *sector = read_sector(disk, sector_num);
 
   if (strncmp(target, dir_info.filename, 12) == 0) {
-    for (int i = 0; i < SECTOR_SIZE; i += 32) {
+    for (int i = 0; i < SECTOR_SIZE; i += sizeof(directory_t)) {
       directory_t *dir = (directory_t *)(sector + i);
       switch (should_skip_dir(*dir)) {
       case 2 ... 3:
-        add_dir_to_sector(sector, dir_info);
+        add_dir_to_sector(sector + i, dir_info);
         write_to_disk(disk, sector, sector_num * 512, SECTOR_SIZE, 1);
         free(sector);
         return;
@@ -207,6 +207,7 @@ void add_to_sector(FILE *disk, fat12_t fat12, int index, dir_info_t dir_info,
     }
   } else {
     find_next_dir(disk, fat12, index, dir_info, dirpath, target);
+    return;
   }
 
   // if we get here, the sector is full, check the next one.
@@ -223,8 +224,6 @@ void add_to_sector(FILE *disk, fat12_t fat12, int index, dir_info_t dir_info,
   } else if (index != 0) {
     // move to the next sector of this directory.
     int next_index = fat_entry(fat12.fat.table, index);
-    // NOTE: Potential for recursion problems here, but it should terminate
-    // once a LAST_SECTOR is reached in the fat table.
     add_to_sector(disk, fat12, next_index, dir_info, dirpath);
   }
 }
@@ -284,7 +283,7 @@ void add_to_tree(FILE *disk, FILE *source, fat12_t fat12, dir_info_t dir_info,
 }
 
 int main(int argc, char *argv[]) {
-  FILE *disk = fopen(argv[1], "rb+");
+  FILE *disk = open_disk(argv[1], "rb+");
   char *filename = (argc == 3) ? argv[2] : argv[3];
   char *dir = (argc == 3) ? 0x00 : argv[2];
 
@@ -292,14 +291,26 @@ int main(int argc, char *argv[]) {
     printf("Error opening disk image.\n");
   }
   FILE *source = fopen(filename, "rb");
-  // make the filename uppercase
-  for (int i = 0; filename[i]; i++) {
-    filename[i] = toupper(filename[i]);
-  }
-
   if (source == NULL) {
     printf("Error: %s does not exist on host system.\n", filename);
     exit(1);
+  }
+
+  // remove the leading / from the directory path if it exists
+  if (dir != NULL) {
+    int o = (dir[0] == '/');
+    for (int i = 0; dir[i + o]; i++) {
+      dir[i] = toupper(dir[i + o]);
+    }
+    dir[strlen(dir) - 1] = 0x00;
+    if (dir[strlen(dir) - 1] == '/') {
+      dir[strlen(dir) - 1] = 0x00;
+    }
+  }
+
+  // make the filename uppercase
+  for (int i = 0; filename[i]; i++) {
+    filename[i] = toupper(filename[i]);
   }
   fat12_t fat12 = fat12_from_file(disk);
 
@@ -307,6 +318,7 @@ int main(int argc, char *argv[]) {
   stat(filename, &attr);
   struct tm *time = localtime(&attr.st_mtime);
   int size = attr.st_size;
+  printf("File size: %d bytes\n", size);
   if (size > fat12.free_space) {
     printf("Error: not enough space on disk to store file.\n");
     exit(1);
