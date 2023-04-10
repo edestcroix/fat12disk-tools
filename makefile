@@ -28,4 +28,4 @@ build/fat12.o: fat12.c fat12.h
 	$(COMPILE) fat12.c -o $@
 
 clean: 
-	rm -rf build/ diskinfo disklist diskget
+	rm -rf build/ diskinfo disklist diskget diskput

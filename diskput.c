@@ -4,9 +4,6 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-// TODO:- Find places where pointers aren't being freed (If any).
-//      - Add some parsing to the input arguments to make sure
-//        they are converted to the format the code expects.
 typedef struct dir_info {
   char filename[50];
   int size;
